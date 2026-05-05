@@ -30,13 +30,22 @@ public class Preprocessor {
             List<Map<String, Object>> data = mapper.readValue(is, new TypeReference<>() {});
             for (Map<String, Object> item : data) {
                 List<Number> vecList = (List<Number>) item.get("vector");
+                if (vecList == null) continue;
                 float[] vec = new float[vecList.size()];
                 for (int i = 0; i < vecList.size(); i++) {
                     vec[i] = vecList.get(i).floatValue();
                 }
                 vectors.add(vec);
-                Boolean fraud = (Boolean) item.get("fraud");
-                labelsList.add(fraud != null && fraud);
+                
+                Object fraudObj = item.get("fraud");
+                Object labelObj = item.get("label");
+                boolean isFraud = false;
+                if (fraudObj instanceof Boolean) {
+                    isFraud = (Boolean) fraudObj;
+                } else if ("fraud".equals(labelObj)) {
+                    isFraud = true;
+                }
+                labelsList.add(isFraud);
             }
         }
 

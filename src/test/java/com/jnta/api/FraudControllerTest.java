@@ -22,26 +22,31 @@ import java.util.List;
 import java.util.Map;
 
 @MicronautTest
-@Property(name = "vptree.path", value = "build/test-fraud.vpt")
-class FraudControllerTest {
+@org.junit.jupiter.api.TestInstance(org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS)
+class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvider {
 
     @Inject
     @Client("/")
     HttpClient client;
 
-    @BeforeAll
-    static void setup(@TempDir Path tempDir) throws IOException {
-        // Create a small tree with 10 vectors.
-        // Neighbors 0-4 are LEGIT (false), 5-9 are FRAUD (true).
-        float[][] vectors = new float[10][14];
-        boolean[] labels = new boolean[10];
-        for (int i = 0; i < 10; i++) {
-            java.util.Arrays.fill(vectors[i], 0.0f);
-            vectors[i][0] = (float) i / 10.0f; // 0.0, 0.1, ..., 0.9
-            labels[i] = (i >= 5);
+    @Override
+    public java.util.Map<String, String> getProperties() {
+        try {
+            java.nio.file.Files.createDirectories(java.nio.file.Path.of("build"));
+            Path vptPath = java.nio.file.Path.of("build/test-fraud.vpt").toAbsolutePath();
+            float[][] vectors = new float[10][14];
+            boolean[] labels = new boolean[10];
+            for (int i = 0; i < 10; i++) {
+                java.util.Arrays.fill(vectors[i], 0.0f);
+                vectors[i][0] = (float) i / 10.0f; // 0.0, 0.1, ..., 0.9
+                labels[i] = (i >= 5);
+            }
+            VpTree tree = VpTree.build(java.util.Arrays.asList(vectors), labels);
+            tree.save(vptPath);
+            return java.util.Map.of("vptree.path", vptPath.toString());
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
         }
-        VpTree tree = VpTree.build(java.util.Arrays.asList(vectors), labels);
-        tree.save(Path.of("build/test-fraud.vpt"));
     }
 
     @Test

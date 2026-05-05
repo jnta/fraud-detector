@@ -19,14 +19,14 @@ public class VpTree {
         this.dims = dims;
         this.size = size;
         this.buffer = buffer;
-        this.nodeSize = 13 + dims * 4;
+        this.nodeSize = 16 + dims * 4;
     }
 
     public static VpTree build(List<float[]> vectors, boolean[] labels) {
         if (vectors.isEmpty()) throw new IllegalArgumentException("No vectors");
         int dims = vectors.get(0).length;
         int size = vectors.size();
-        int nodeSize = 13 + dims * 4;
+        int nodeSize = 16 + dims * 4;
         ByteBuffer buffer = ByteBuffer.allocateDirect(size * nodeSize).order(ByteOrder.LITTLE_ENDIAN);
         
         int[] indices = new int[size];
@@ -71,13 +71,13 @@ public class VpTree {
     }
 
     private static void writeNode(ByteBuffer buffer, int pos, float threshold, int left, int right, byte label, float[] vp, int dims) {
-        int nodeSize = 13 + dims * 4;
+        int nodeSize = 16 + dims * 4;
         buffer.putFloat(pos * nodeSize, threshold);
         buffer.putInt(pos * nodeSize + 4, left);
         buffer.putInt(pos * nodeSize + 8, right);
         buffer.put(pos * nodeSize + 12, label);
         for (int i = 0; i < dims; i++) {
-            buffer.putFloat(pos * nodeSize + 13 + i * 4, vp[i]);
+            buffer.putFloat(pos * nodeSize + 16 + i * 4, vp[i]);
         }
     }
 
@@ -137,7 +137,7 @@ public class VpTree {
     }
 
     public float[] getVector(int index) {
-        int offset = index * nodeSize + 13;
+        int offset = index * nodeSize + 16;
         float[] v = new float[dims];
         for (int i = 0; i < dims; i++) {
             v[i] = buffer.getFloat(offset + i * 4);
@@ -161,12 +161,7 @@ public class VpTree {
         int left = buffer.getInt(offset + 4);
         int right = buffer.getInt(offset + 8);
         
-        float[] vp = new float[dims];
-        for (int i = 0; i < dims; i++) {
-            vp[i] = buffer.getFloat(offset + 13 + i * 4);
-        }
-        
-        float d = SimdDistance.compute(query, vp);
+        float d = SimdDistance.compute(query, buffer, offset + 16);
         queue.insert(nodeIdx, d);
 
         if (d < mu) {
