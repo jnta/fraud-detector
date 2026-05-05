@@ -13,37 +13,40 @@ public class VpTree {
     private final int dims;
     private final int size;
     private final ByteBuffer buffer;
+    private final int nodeSize;
 
     private VpTree(int dims, int size, ByteBuffer buffer) {
         this.dims = dims;
         this.size = size;
         this.buffer = buffer;
+        this.nodeSize = 13 + dims * 4;
     }
 
-    public static VpTree build(List<float[]> vectors) {
+    public static VpTree build(List<float[]> vectors, boolean[] labels) {
         if (vectors.isEmpty()) throw new IllegalArgumentException("No vectors");
         int dims = vectors.get(0).length;
         int size = vectors.size();
-        int nodeSize = 12 + dims * 4;
+        int nodeSize = 13 + dims * 4;
         ByteBuffer buffer = ByteBuffer.allocateDirect(size * nodeSize).order(ByteOrder.LITTLE_ENDIAN);
         
         int[] indices = new int[size];
         for (int i = 0; i < size; i++) indices[i] = i;
         
-        buildRecursive(vectors, indices, 0, size, buffer, dims, new int[]{0});
+        buildRecursive(vectors, labels, indices, 0, size, buffer, dims, new int[]{0});
         
         return new VpTree(dims, size, buffer);
     }
 
-    private static int buildRecursive(List<float[]> vectors, int[] indices, int start, int end, ByteBuffer buffer, int dims, int[] nextNodeIdx) {
+    private static int buildRecursive(List<float[]> vectors, boolean[] labels, int[] indices, int start, int end, ByteBuffer buffer, int dims, int[] nextNodeIdx) {
         if (start >= end) return -1;
         
         int nodeIdx = nextNodeIdx[0]++; 
         int vpIdx = indices[start];
         float[] vp = vectors.get(vpIdx);
+        byte label = (byte) (labels[vpIdx] ? 1 : 0);
         
         if (end - start == 1) {
-            writeNode(buffer, nodeIdx, 0, -1, -1, vp, dims);
+            writeNode(buffer, nodeIdx, 0, -1, -1, label, vp, dims);
             return nodeIdx;
         }
 
@@ -60,20 +63,21 @@ public class VpTree {
         // Partition indices based on mu
         int mid = partition(vectors, indices, start + 1, end, vp, mu);
         
-        int left = buildRecursive(vectors, indices, start + 1, mid, buffer, dims, nextNodeIdx);
-        int right = buildRecursive(vectors, indices, mid, end, buffer, dims, nextNodeIdx);
+        int left = buildRecursive(vectors, labels, indices, start + 1, mid, buffer, dims, nextNodeIdx);
+        int right = buildRecursive(vectors, labels, indices, mid, end, buffer, dims, nextNodeIdx);
         
-        writeNode(buffer, nodeIdx, mu, left, right, vp, dims);
+        writeNode(buffer, nodeIdx, mu, left, right, label, vp, dims);
         return nodeIdx;
     }
 
-    private static void writeNode(ByteBuffer buffer, int pos, float threshold, int left, int right, float[] vp, int dims) {
-        int nodeSize = 12 + dims * 4;
+    private static void writeNode(ByteBuffer buffer, int pos, float threshold, int left, int right, byte label, float[] vp, int dims) {
+        int nodeSize = 13 + dims * 4;
         buffer.putFloat(pos * nodeSize, threshold);
         buffer.putInt(pos * nodeSize + 4, left);
         buffer.putInt(pos * nodeSize + 8, right);
+        buffer.put(pos * nodeSize + 12, label);
         for (int i = 0; i < dims; i++) {
-            buffer.putFloat(pos * nodeSize + 12 + i * 4, vp[i]);
+            buffer.putFloat(pos * nodeSize + 13 + i * 4, vp[i]);
         }
     }
 
@@ -133,13 +137,49 @@ public class VpTree {
     }
 
     public float[] getVector(int index) {
-        int nodeSize = 12 + dims * 4;
-        int offset = index * nodeSize + 12;
+        int offset = index * nodeSize + 13;
         float[] v = new float[dims];
         for (int i = 0; i < dims; i++) {
             v[i] = buffer.getFloat(offset + i * 4);
         }
         return v;
+    }
+
+    public boolean isFraud(int index) {
+        return buffer.get(index * nodeSize + 12) == 1;
+    }
+
+    public void search(float[] query, KnnQueue queue) {
+        searchRecursive(0, query, queue);
+    }
+
+    private void searchRecursive(int nodeIdx, float[] query, KnnQueue queue) {
+        if (nodeIdx == -1) return;
+
+        int offset = nodeIdx * nodeSize;
+        float mu = buffer.getFloat(offset);
+        int left = buffer.getInt(offset + 4);
+        int right = buffer.getInt(offset + 8);
+        
+        float[] vp = new float[dims];
+        for (int i = 0; i < dims; i++) {
+            vp[i] = buffer.getFloat(offset + 13 + i * 4);
+        }
+        
+        float d = SimdDistance.compute(query, vp);
+        queue.insert(nodeIdx, d);
+
+        if (d < mu) {
+            searchRecursive(left, query, queue);
+            if (d + queue.worstDistance() >= mu) {
+                searchRecursive(right, query, queue);
+            }
+        } else {
+            searchRecursive(right, query, queue);
+            if (d - queue.worstDistance() <= mu) {
+                searchRecursive(left, query, queue);
+            }
+        }
     }
 
     public void warmup() {

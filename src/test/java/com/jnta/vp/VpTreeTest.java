@@ -17,13 +17,15 @@ class VpTreeTest {
         int numVectors = 100;
         int dims = 384; // standard for all-MiniLM-L6-v2
         List<float[]> vectors = new ArrayList<>();
+        boolean[] labels = new boolean[numVectors];
         for (int i = 0; i < numVectors; i++) {
             float[] v = new float[dims];
             v[0] = i; // simple distinct values
             vectors.add(v);
+            labels[i] = (i % 2 == 0);
         }
 
-        VpTree tree = VpTree.build(vectors);
+        VpTree tree = VpTree.build(vectors, labels);
         Path tempFile = Files.createTempFile("vptree", ".vpt");
         tree.save(tempFile);
 
@@ -31,6 +33,8 @@ class VpTreeTest {
         Assertions.assertEquals(numVectors, loadedTree.size());
         // Verify a sample
         Assertions.assertArrayEquals(vectors.get(0), loadedTree.getVector(0), 0.001f);
+        Assertions.assertTrue(loadedTree.isFraud(0));
+        Assertions.assertFalse(loadedTree.isFraud(1));
         
         Files.deleteIfExists(tempFile);
     }

@@ -23,6 +23,7 @@ public class Preprocessor {
         String outputPath = args[1];
 
         List<float[]> vectors = new ArrayList<>();
+        List<Boolean> labelsList = new ArrayList<>();
         ObjectMapper mapper = new ObjectMapper();
 
         try (InputStream is = new GZIPInputStream(new FileInputStream(inputPath))) {
@@ -34,10 +35,15 @@ public class Preprocessor {
                     vec[i] = vecList.get(i).floatValue();
                 }
                 vectors.add(vec);
+                Boolean fraud = (Boolean) item.get("fraud");
+                labelsList.add(fraud != null && fraud);
             }
         }
 
-        VpTree tree = VpTree.build(vectors);
+        boolean[] labels = new boolean[labelsList.size()];
+        for (int i = 0; i < labelsList.size(); i++) labels[i] = labelsList.get(i);
+
+        VpTree tree = VpTree.build(vectors, labels);
         tree.save(Paths.get(outputPath));
         System.out.println("Saved VP-Tree with " + vectors.size() + " vectors to " + outputPath);
     }

@@ -26,7 +26,7 @@ class StartupWarmupTest {
         Path vptPath = tempDir.resolve("test.vpt");
         
         // Create a small tree
-        VpTree tree = VpTree.build(List.of(new float[14], new float[14]));
+        VpTree tree = VpTree.build(List.of(new float[14], new float[14]), new boolean[]{false, false});
         tree.save(vptPath);
 
         try (EmbeddedServer server = ApplicationContext.run(EmbeddedServer.class, 
@@ -50,7 +50,7 @@ class StartupWarmupTest {
         float[] vec2 = new float[14];
         vec2[0] = 0.9f;
         
-        VpTree tree = VpTree.build(List.of(vec1, vec2));
+        VpTree tree = VpTree.build(List.of(vec1, vec2), new boolean[]{false, false});
         tree.save(vptPath);
 
         try (EmbeddedServer server = ApplicationContext.run(EmbeddedServer.class, 
