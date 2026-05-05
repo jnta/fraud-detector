@@ -38,3 +38,10 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Agent ###
+AGENTS.md
+.scratch/
+.agents/
+docs/
+skills-lock.json
