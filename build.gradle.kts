@@ -44,7 +44,9 @@ graalvmNative.toolchainDetection = false
 graalvmNative {
     binaries {
         all {
-            buildArgs.add("-H:+SharedArenaSupport")
+
+            buildArgs.add("--add-modules")
+            buildArgs.add("jdk.incubator.vector")
         }
     }
 }

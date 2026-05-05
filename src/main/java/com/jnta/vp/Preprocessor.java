@@ -29,7 +29,7 @@ public class Preprocessor {
         try (InputStream is = new GZIPInputStream(new FileInputStream(inputPath))) {
             List<Map<String, Object>> data = mapper.readValue(is, new TypeReference<>() {});
             for (Map<String, Object> item : data) {
-                List<Double> vecList = (List<Double>) item.get("vector");
+                List<Number> vecList = (List<Number>) item.get("vector");
                 float[] vec = new float[vecList.size()];
                 for (int i = 0; i < vecList.size(); i++) {
                     vec[i] = vecList.get(i).floatValue();

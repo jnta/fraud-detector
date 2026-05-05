@@ -45,3 +45,10 @@ AGENTS.md
 .agents/
 docs/
 skills-lock.json
+
+# Large Binary Files
+references.vpt
+*.vpt
+
+# Test Results
+src/main/resources/tests/test/
