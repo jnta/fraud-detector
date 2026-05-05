@@ -156,33 +156,61 @@ public class VpTree {
         return segment.get(ValueLayout.JAVA_BYTE, (long) index * nodeSize + 12) == 1;
     }
 
+    private static final ThreadLocal<int[]> NODE_STACK = ThreadLocal.withInitial(() -> new int[1024]);
+    private static final ThreadLocal<float[]> BOUND_STACK = ThreadLocal.withInitial(() -> new float[1024]);
+
     public void search(float[] query, KnnQueue queue) {
         if (query.length != dims) {
             throw new IllegalArgumentException("Query dimension mismatch: expected " + dims + " but got " + query.length);
         }
-        searchRecursive(0, query, queue);
-    }
 
-    private void searchRecursive(int nodeIdx, float[] query, KnnQueue queue) {
-        if (nodeIdx == -1) return;
+        int[] nodeStack = NODE_STACK.get();
+        float[] boundStack = BOUND_STACK.get();
+        int top = 0;
 
-        long offset = (long) nodeIdx * nodeSize;
-        float mu = segment.get(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset);
-        int left = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 4);
-        int right = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8);
-        
-        float d = SimdDistance.compute(query, segment, offset + 16);
-        queue.insert(nodeIdx, d);
+        nodeStack[top] = 0;
+        boundStack[top] = 0.0f;
+        top++;
 
-        if (d < mu) {
-            searchRecursive(left, query, queue);
-            if (d + queue.worstDistance() >= mu) {
-                searchRecursive(right, query, queue);
-            }
-        } else {
-            searchRecursive(right, query, queue);
-            if (d - queue.worstDistance() <= mu) {
-                searchRecursive(left, query, queue);
+        while (top > 0) {
+            top--;
+            int nodeIdx = nodeStack[top];
+            float bound = boundStack[top];
+
+            if (nodeIdx == -1) continue;
+            if (bound > queue.worstDistance()) continue;
+
+            long offset = (long) nodeIdx * nodeSize;
+            float mu = segment.get(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset);
+            int left = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 4);
+            int right = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8);
+            
+            float d = SimdDistance.compute(query, segment, offset + 16);
+            queue.insert(nodeIdx, d);
+
+            float worst = queue.worstDistance();
+
+            if (d < mu) {
+                // Near is left, far is right
+                // Push far first to process near first
+                if (mu - d <= worst) {
+                    nodeStack[top] = right;
+                    boundStack[top] = mu - d;
+                    top++;
+                }
+                nodeStack[top] = left;
+                boundStack[top] = 0.0f;
+                top++;
+            } else {
+                // Near is right, far is left
+                if (d - mu <= worst) {
+                    nodeStack[top] = left;
+                    boundStack[top] = d - mu;
+                    top++;
+                }
+                nodeStack[top] = right;
+                boundStack[top] = 0.0f;
+                top++;
             }
         }
     }
