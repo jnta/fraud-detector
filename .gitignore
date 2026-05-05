@@ -49,6 +49,7 @@ skills-lock.json
 # Large Binary Files
 references.vpt
 *.vpt
+*.bak
 references.json.gz
 
 # Test Results
