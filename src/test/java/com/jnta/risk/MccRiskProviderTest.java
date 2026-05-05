@@ -18,6 +18,6 @@ class MccRiskProviderTest {
         // Assuming mcc_risk.json has 5411 and 5812
         Assertions.assertTrue(riskProvider.getRiskScore(5411) > 0);
         Assertions.assertTrue(riskProvider.getRiskScore(5812) > 0);
-        Assertions.assertEquals(0.0f, riskProvider.getRiskScore(9999), 0.001f);
+        Assertions.assertEquals(0.5f, riskProvider.getRiskScore(9999), 0.001f);
     }
 }
