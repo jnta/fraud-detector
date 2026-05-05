@@ -2,6 +2,7 @@ plugins {
     id("io.micronaut.application") version "5.0.0-M1"
     id("com.gradleup.shadow") version "9.4.1"
     id("io.micronaut.aot") version "5.0.0-M1"
+    id("me.champeau.jmh") version "0.7.2"
 }
 
 version = "0.1"
@@ -17,8 +18,10 @@ dependencies {
     annotationProcessor("io.micronaut:micronaut-http-validation")
     annotationProcessor("io.micronaut.serde:micronaut-serde-processor")
     implementation("io.micronaut.serde:micronaut-serde-jackson")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
     compileOnly("io.micronaut:micronaut-http-client")
     runtimeOnly("ch.qos.logback:logback-classic")
+    implementation("it.unimi.dsi:fastutil:8.5.15")
     testImplementation("io.micronaut:micronaut-http-client")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -82,11 +85,34 @@ tasks.named<io.micronaut.gradle.docker.MicronautDockerfile>("dockerfile") {
 
 
 
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector"))
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-modules", "jdk.incubator.vector")
+}
+
 // https://docs.gradle.org/current/userguide/upgrading_major_version_9.html#test_task_fails_when_no_tests_are_discovered
 tasks.withType<AbstractTestTask>().configureEach {
     failOnNoDiscoveredTests = false
 }
 
 
+jmh {
+    jvmArgs.add("--add-modules")
+    jvmArgs.add("jdk.incubator.vector")
+    benchmarkMode.add("avgt")
+    timeUnit.set("ns")
+    warmupIterations.set(1)
+    iterations.set(1)
+    fork.set(1)
+}
+
+tasks.register<JavaExec>("preprocess") {
+    mainClass.set("com.jnta.vp.Preprocessor")
+    classpath = sourceSets["main"].runtimeClasspath
+    args = project.findProperty("args")?.toString()?.split(" ") ?: emptyList()
+}
 
 
