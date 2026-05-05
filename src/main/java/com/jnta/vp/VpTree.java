@@ -1,43 +1,44 @@
 package com.jnta.vp;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
-import java.util.Random;
 
 public class VpTree {
     private final int dims;
     private final int size;
-    private final ByteBuffer buffer;
-    private final int nodeSize;
+    private final MemorySegment segment;
+    private final long nodeSize;
 
-    private VpTree(int dims, int size, ByteBuffer buffer) {
+    private VpTree(int dims, int size, MemorySegment segment) {
         this.dims = dims;
         this.size = size;
-        this.buffer = buffer;
-        this.nodeSize = 16 + dims * 4;
+        this.segment = segment;
+        this.nodeSize = 16L + (long) dims * 4;
     }
 
     public static VpTree build(List<float[]> vectors, boolean[] labels) {
         if (vectors.isEmpty()) throw new IllegalArgumentException("No vectors");
         int dims = vectors.get(0).length;
         int size = vectors.size();
-        int nodeSize = 16 + dims * 4;
-        ByteBuffer buffer = ByteBuffer.allocateDirect(size * nodeSize).order(ByteOrder.LITTLE_ENDIAN);
+        long nodeSize = 16L + (long) dims * 4;
+        MemorySegment segment = Arena.ofAuto().allocate((long) size * nodeSize);
         
         int[] indices = new int[size];
         for (int i = 0; i < size; i++) indices[i] = i;
         
-        buildRecursive(vectors, labels, indices, 0, size, buffer, dims, new int[]{0});
+        buildRecursive(vectors, labels, indices, 0, size, segment, dims, new int[]{0});
         
-        return new VpTree(dims, size, buffer);
+        return new VpTree(dims, size, segment);
     }
 
-    private static int buildRecursive(List<float[]> vectors, boolean[] labels, int[] indices, int start, int end, ByteBuffer buffer, int dims, int[] nextNodeIdx) {
+    private static int buildRecursive(List<float[]> vectors, boolean[] labels, int[] indices, int start, int end, MemorySegment segment, int dims, int[] nextNodeIdx) {
         if (start >= end) return -1;
         
         int nodeIdx = nextNodeIdx[0]++; 
@@ -46,7 +47,7 @@ public class VpTree {
         byte label = (byte) (labels[vpIdx] ? 1 : 0);
         
         if (end - start == 1) {
-            writeNode(buffer, nodeIdx, 0, -1, -1, label, vp, dims);
+            writeNode(segment, nodeIdx, 0, -1, -1, label, vp, dims);
             return nodeIdx;
         }
 
@@ -63,21 +64,22 @@ public class VpTree {
         // Partition indices based on mu
         int mid = partition(vectors, indices, start + 1, end, vp, mu);
         
-        int left = buildRecursive(vectors, labels, indices, start + 1, mid, buffer, dims, nextNodeIdx);
-        int right = buildRecursive(vectors, labels, indices, mid, end, buffer, dims, nextNodeIdx);
+        int left = buildRecursive(vectors, labels, indices, start + 1, mid, segment, dims, nextNodeIdx);
+        int right = buildRecursive(vectors, labels, indices, mid, end, segment, dims, nextNodeIdx);
         
-        writeNode(buffer, nodeIdx, mu, left, right, label, vp, dims);
+        writeNode(segment, nodeIdx, mu, left, right, label, vp, dims);
         return nodeIdx;
     }
 
-    private static void writeNode(ByteBuffer buffer, int pos, float threshold, int left, int right, byte label, float[] vp, int dims) {
-        int nodeSize = 16 + dims * 4;
-        buffer.putFloat(pos * nodeSize, threshold);
-        buffer.putInt(pos * nodeSize + 4, left);
-        buffer.putInt(pos * nodeSize + 8, right);
-        buffer.put(pos * nodeSize + 12, label);
+    private static void writeNode(MemorySegment segment, int pos, float threshold, int left, int right, byte label, float[] vp, int dims) {
+        long nodeSize = 16L + (long) dims * 4;
+        long offset = (long) pos * nodeSize;
+        segment.set(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset, threshold);
+        segment.set(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 4, left);
+        segment.set(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8, right);
+        segment.set(ValueLayout.JAVA_BYTE, offset + 12, label);
         for (int i = 0; i < dims; i++) {
-            buffer.putFloat(pos * nodeSize + 16 + i * 4, vp[i]);
+            segment.set(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 16 + (long) i * 4, vp[i]);
         }
     }
 
@@ -107,28 +109,33 @@ public class VpTree {
 
     public void save(Path path) throws IOException {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            // Header: dims(4), size(4)
-            ByteBuffer header = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+            java.nio.ByteBuffer header = java.nio.ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
             header.putInt(dims);
             header.putInt(size);
             header.flip();
             channel.write(header);
-            buffer.rewind();
-            channel.write(buffer);
+            
+            // Write memory segment to channel
+            channel.write(segment.asByteBuffer());
         }
     }
 
     public static VpTree load(Path path) throws IOException {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
-            ByteBuffer header = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+            java.nio.ByteBuffer header = java.nio.ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
             channel.read(header);
             header.flip();
             int dims = header.getInt();
             int size = header.getInt();
             
-            // Map the rest of the file starting after the header
-            ByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 8, channel.size() - 8).order(ByteOrder.LITTLE_ENDIAN);
-            return new VpTree(dims, size, buffer);
+            long nodeSize = 16L + (long) dims * 4;
+            long expectedSize = 8L + (long) size * nodeSize;
+            if (channel.size() < expectedSize) {
+                throw new IOException("File too small: expected " + expectedSize + " bytes but got " + channel.size());
+            }
+
+            MemorySegment segment = channel.map(FileChannel.MapMode.READ_ONLY, 8, (long) size * nodeSize, Arena.ofAuto());
+            return new VpTree(dims, size, segment);
         }
     }
 
@@ -137,31 +144,34 @@ public class VpTree {
     }
 
     public float[] getVector(int index) {
-        int offset = index * nodeSize + 16;
+        long offset = (long) index * nodeSize + 16;
         float[] v = new float[dims];
         for (int i = 0; i < dims; i++) {
-            v[i] = buffer.getFloat(offset + i * 4);
+            v[i] = segment.get(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + (long) i * 4);
         }
         return v;
     }
 
     public boolean isFraud(int index) {
-        return buffer.get(index * nodeSize + 12) == 1;
+        return segment.get(ValueLayout.JAVA_BYTE, (long) index * nodeSize + 12) == 1;
     }
 
     public void search(float[] query, KnnQueue queue) {
+        if (query.length != dims) {
+            throw new IllegalArgumentException("Query dimension mismatch: expected " + dims + " but got " + query.length);
+        }
         searchRecursive(0, query, queue);
     }
 
     private void searchRecursive(int nodeIdx, float[] query, KnnQueue queue) {
         if (nodeIdx == -1) return;
 
-        int offset = nodeIdx * nodeSize;
-        float mu = buffer.getFloat(offset);
-        int left = buffer.getInt(offset + 4);
-        int right = buffer.getInt(offset + 8);
+        long offset = (long) nodeIdx * nodeSize;
+        float mu = segment.get(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset);
+        int left = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 4);
+        int right = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8);
         
-        float d = SimdDistance.compute(query, buffer, offset + 16);
+        float d = SimdDistance.compute(query, segment, offset + 16);
         queue.insert(nodeIdx, d);
 
         if (d < mu) {
@@ -178,15 +188,14 @@ public class VpTree {
     }
 
     public void warmup() {
-        int sum = 0;
-        for (int i = 0; i < buffer.capacity(); i += 4096) {
-            sum += buffer.get(i);
+        long sum = 0;
+        long cap = segment.byteSize();
+        for (long i = 0; i < cap; i += 4096) {
+            sum += segment.get(ValueLayout.JAVA_BYTE, i);
         }
-        // Touch the last byte too
-        if (buffer.capacity() > 0) {
-            sum += buffer.get(buffer.capacity() - 1);
+        if (cap > 0) {
+            sum += segment.get(ValueLayout.JAVA_BYTE, cap - 1);
         }
-        // Minimal side effect to prevent JIT from optimizing it away
-        if (sum == 1234567) System.out.print(""); 
+        if (sum == 123456789L) System.out.print(""); 
     }
 }

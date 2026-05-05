@@ -43,7 +43,7 @@ export const options = {
 
 export default function smokeTest() {
     const res = http.post(
-        'http://localhost:9999/fraud-score',
+        'http://nginx/fraud-score',
         JSON.stringify(payload),
         { headers: { 'Content-Type': 'application/json' }, timeout: '10s' },
     );

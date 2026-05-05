@@ -1,6 +1,8 @@
 services:
   nginx:
     image: nginx:alpine
+    platform: linux/amd64
+    privileged: false
     ports:
       - "9999:80"
     volumes:
@@ -18,6 +20,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.native
+    platform: linux/amd64
+    privileged: false
     environment:
       - VPTREE_PATH=/data/references.vpt
     volumes:
@@ -32,6 +36,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.native
+    platform: linux/amd64
+    privileged: false
     environment:
       - VPTREE_PATH=/data/references.vpt
     volumes:
@@ -44,4 +50,5 @@ services:
 
 networks:
   default:
+    driver: bridge
     name: fraud-detector-network
