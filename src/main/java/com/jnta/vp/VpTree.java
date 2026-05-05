@@ -190,12 +190,15 @@ public class VpTree {
     public void warmup() {
         long sum = 0;
         long cap = segment.byteSize();
-        for (long i = 0; i < cap; i += 4096) {
+        for (long i = 0; i < cap; i += 1024) {
             sum += segment.get(ValueLayout.JAVA_BYTE, i);
         }
         if (cap > 0) {
             sum += segment.get(ValueLayout.JAVA_BYTE, cap - 1);
         }
-        if (sum == 123456789L) System.out.print(""); 
+        // Use sum to prevent optimization
+        if (sum == System.nanoTime()) {
+            System.out.print("");
+        }
     }
 }

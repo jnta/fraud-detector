@@ -13,8 +13,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.1'
-          memory: 30M
+          cpus: '0.05'
+          memory: 20M
 
   api1:
     build:
@@ -22,15 +22,17 @@ services:
       dockerfile: Dockerfile.native
     platform: linux/amd64
     privileged: false
+    command: ["-Xmx48m"]
     environment:
       - VPTREE_PATH=/data/references.vpt
+      - JAVA_OPTS=-Xmx48m -Xms48m -XX:MaxDirectMemorySize=200m
     volumes:
       - ./references.vpt:/data/references.vpt:ro
     deploy:
       resources:
         limits:
-          cpus: '0.45'
-          memory: 150M
+          cpus: '0.475'
+          memory: 165M
 
   api2:
     build:
@@ -38,15 +40,17 @@ services:
       dockerfile: Dockerfile.native
     platform: linux/amd64
     privileged: false
+    command: ["-Xmx48m"]
     environment:
       - VPTREE_PATH=/data/references.vpt
+      - JAVA_OPTS=-Xmx48m -Xms48m -XX:MaxDirectMemorySize=200m
     volumes:
       - ./references.vpt:/data/references.vpt:ro
     deploy:
       resources:
         limits:
-          cpus: '0.45'
-          memory: 150M
+          cpus: '0.475'
+          memory: 165M
 
 networks:
   default:
