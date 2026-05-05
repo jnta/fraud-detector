@@ -121,10 +121,9 @@ public class VpTree {
             header.flip();
             int dims = header.getInt();
             int size = header.getInt();
-            int nodeSize = 12 + dims * 4;
-            ByteBuffer buffer = ByteBuffer.allocateDirect(size * nodeSize).order(ByteOrder.LITTLE_ENDIAN);
-            channel.read(buffer);
-            buffer.flip();
+            
+            // Map the rest of the file starting after the header
+            ByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 8, channel.size() - 8).order(ByteOrder.LITTLE_ENDIAN);
             return new VpTree(dims, size, buffer);
         }
     }
@@ -141,5 +140,18 @@ public class VpTree {
             v[i] = buffer.getFloat(offset + i * 4);
         }
         return v;
+    }
+
+    public void warmup() {
+        int sum = 0;
+        for (int i = 0; i < buffer.capacity(); i += 4096) {
+            sum += buffer.get(i);
+        }
+        // Touch the last byte too
+        if (buffer.capacity() > 0) {
+            sum += buffer.get(buffer.capacity() - 1);
+        }
+        // Minimal side effect to prevent JIT from optimizing it away
+        if (sum == 1234567) System.out.print(""); 
     }
 }
