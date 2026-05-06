@@ -12,6 +12,28 @@ import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
 public class Preprocessor {
+    public static float[] findGlobalBounds(List<float[]> vectors) {
+        float min = Float.POSITIVE_INFINITY;
+        float max = Float.NEGATIVE_INFINITY;
+        for (float[] vec : vectors) {
+            for (float v : vec) {
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+        }
+        return new float[]{min, max};
+    }
+
+    public static byte[] quantize(float[] vec, float min, float max) {
+        byte[] quantized = new byte[vec.length];
+        float range = max - min;
+        if (range == 0) range = 1.0f;
+        for (int i = 0; i < vec.length; i++) {
+            float normalized = (vec[i] - min) / range;
+            quantized[i] = (byte) Math.round(normalized * 255.0f - 128.0f);
+        }
+        return quantized;
+    }
 
     public static void main(String[] args) throws IOException {
         if (args.length < 2) {
@@ -54,6 +76,6 @@ public class Preprocessor {
 
         VpTree tree = VpTree.build(vectors, labels);
         tree.save(Paths.get(outputPath));
-        System.out.println("Saved VP-Tree with " + vectors.size() + " vectors to " + outputPath);
+        System.out.println("Saved Quantized (8-bit) VP-Tree with " + vectors.size() + " vectors to " + outputPath);
     }
 }

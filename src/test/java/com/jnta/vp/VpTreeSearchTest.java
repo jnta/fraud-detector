@@ -23,6 +23,6 @@ class VpTreeSearchTest {
 
         Assertions.assertEquals(0, queue.getIndices()[0]);
         // Distance is (0.1-0)^2 + (0.1-0)^2 = 0.01 + 0.01 = 0.02
-        Assertions.assertEquals(0.02f, queue.getDistances()[0], 0.0001f);
+        Assertions.assertEquals(0.02f, queue.getDistances()[0], 0.005f);
     }
 }

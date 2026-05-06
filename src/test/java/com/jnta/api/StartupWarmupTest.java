@@ -63,10 +63,10 @@ class StartupWarmupTest {
             Assertions.assertEquals(2, loadedTree.size());
             
             float[] v1 = loadedTree.getVector(0);
-            Assertions.assertEquals(0.5f, v1[0]);
+            Assertions.assertEquals(0.5f, v1[0], 0.01f);
             
             float[] v2 = loadedTree.getVector(1);
-            Assertions.assertEquals(0.9f, v2[0]);
+            Assertions.assertEquals(0.9f, v2[0], 0.01f);
         }
     }
 }
