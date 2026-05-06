@@ -2,7 +2,6 @@ package com.jnta.api;
 
 import com.jnta.risk.MccRiskProvider;
 import jakarta.inject.Singleton;
-import java.time.OffsetDateTime;
 
 @Singleton
 public class TransactionVectorizer {
@@ -30,22 +29,16 @@ public class TransactionVectorizer {
             vector[2] = 1.0f;
         }
         
-        // Time parsing
-        String requestedAtStr = parser.getTransactionTimestamp();
-        OffsetDateTime requestedAt = OffsetDateTime.parse(requestedAtStr);
-        
         // 3: hour_of_day: hour / 23
-        vector[3] = requestedAt.getHour() / 23.0f;
+        vector[3] = parser.getHour() / 23.0f;
         
         // 4: day_of_week: (day - 1) / 6 (Monday=0, Sunday=6)
-        vector[4] = (requestedAt.getDayOfWeek().getValue() - 1) / 6.0f;
+        vector[4] = (parser.getDayOfWeek() - 1) / 6.0f;
         
         // 5, 6: last transaction
-        String lastTsStr = parser.getLastTransactionTimestamp();
-        if (lastTsStr != null) {
-            OffsetDateTime lastTs = OffsetDateTime.parse(lastTsStr);
-            long txSeconds = requestedAt.toEpochSecond();
-            long lastSeconds = lastTs.toEpochSecond();
+        long txSeconds = parser.getTimestampEpoch(false);
+        long lastSeconds = parser.getTimestampEpoch(true);
+        if (txSeconds != -1 && lastSeconds != -1) {
             float minutes = (txSeconds - lastSeconds) / 60.0f;
             vector[5] = clamp(minutes / riskProvider.getMaxMinutes());
             vector[6] = clamp(parser.getKmFromLast() / riskProvider.getMaxKm());

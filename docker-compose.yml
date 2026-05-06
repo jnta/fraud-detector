@@ -10,6 +10,7 @@ services:
     depends_on:
       - api1
       - api2
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -22,10 +23,10 @@ services:
       dockerfile: Dockerfile.native
     platform: linux/amd64
     privileged: false
-    command: ["-Xmx48m"]
+    command: ["-Xmx32m", "-XX:MaxDirectMemorySize=10m"]
     environment:
       - VPTREE_PATH=/data/references.vpt
-      - JAVA_OPTS=-Xmx48m -Xms48m -XX:MaxDirectMemorySize=200m
+      - JAVA_OPTS=-Xmx32m -Xms32m -XX:MaxDirectMemorySize=10m
     volumes:
       - ./references.vpt:/data/references.vpt:ro
     deploy:
@@ -40,10 +41,10 @@ services:
       dockerfile: Dockerfile.native
     platform: linux/amd64
     privileged: false
-    command: ["-Xmx48m"]
+    command: ["-Xmx32m", "-XX:MaxDirectMemorySize=10m"]
     environment:
       - VPTREE_PATH=/data/references.vpt
-      - JAVA_OPTS=-Xmx48m -Xms48m -XX:MaxDirectMemorySize=200m
+      - JAVA_OPTS=-Xmx32m -Xms32m -XX:MaxDirectMemorySize=10m
     volumes:
       - ./references.vpt:/data/references.vpt:ro
     deploy:

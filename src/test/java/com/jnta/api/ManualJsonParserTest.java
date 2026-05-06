@@ -34,5 +34,20 @@ class ManualJsonParserTest {
         assertEquals(10.5f, parser.getKmFromHome(), 0.001);
         assertEquals("2024-05-05T19:00:00Z", parser.getLastTransactionTimestamp());
         assertEquals(2.0f, parser.getKmFromLast(), 0.001);
+
+        // Test time helpers
+        assertEquals(20, parser.getHour());
+        assertEquals(7, parser.getDayOfWeek()); // 2024-05-05 was Sunday (7)
+        
+        long t1 = parser.getTimestampEpoch(false);
+        long t2 = parser.getTimestampEpoch(true);
+        assertEquals(3600, t1 - t2); // 20:00 - 19:00 = 1 hour
+    }
+
+    @Test
+    void shouldParseLeapYearCorrectly() {
+        String json = "{\"transaction\": {\"requested_at\": \"2024-02-29T12:00:00Z\"}}";
+        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
+        assertEquals(4, parser.getDayOfWeek()); // 2024-02-29 was Thursday (4)
     }
 }
