@@ -23,8 +23,8 @@ services:
     platform: linux/amd64
     privileged: false
     command: [
-      "-Xmx100m", 
-      "-Xms100m", 
+      "-Xmx96m", 
+      "-Xms96m", 
       "-XX:+UseSerialGC", 
       "-Djdk.virtualThreadScheduler.parallelism=1"
     ]
