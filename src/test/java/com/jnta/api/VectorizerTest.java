@@ -1,13 +1,11 @@
 package com.jnta.api;
 
-import com.jnta.risk.MccRiskProvider;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import java.time.OffsetDateTime;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
 
 @MicronautTest
 class VectorizerTest {
@@ -18,18 +16,18 @@ class VectorizerTest {
     @Test
     @DisplayName("Should vectorize a complete transaction payload correctly")
     void testVectorization() {
-        // 2026-03-11 is Wednesday. 
-        // If Monday=0, Tuesday=1, Wednesday=2.
-        TransactionPayload payload = new TransactionPayload(
-            "tx-1",
-            new TransactionPayload.TransactionData(100.0f, 1, OffsetDateTime.parse("2026-03-11T18:45:53Z")),
-            new TransactionPayload.CustomerData(100.0f, 1, List.of("MERC-1")),
-            new TransactionPayload.MerchantData("MERC-1", "5411", 100.0f),
-            new TransactionPayload.TerminalData(false, true, 10.0f),
-            new TransactionPayload.LastTransactionData(OffsetDateTime.parse("2026-03-11T18:40:53Z"), 5.0f)
-        );
-
-        float[] vector = vectorizer.vectorize(payload);
+        String json = """
+        {
+          "transaction": { "amount": 100.0, "installments": 1, "requested_at": "2026-03-11T18:45:53Z" },
+          "customer": { "avg_amount": 100.0, "tx_count_24h": 1, "known_merchants": ["MERC-1"] },
+          "merchant": { "id": "MERC-1", "mcc": "5411", "avg_amount": 100.0 },
+          "terminal": { "is_online": false, "card_present": true, "km_from_home": 10.0 },
+          "last_transaction": { "timestamp": "2026-03-11T18:40:53Z", "km_from_current": 5.0 }
+        }
+        """;
+        
+        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
+        float[] vector = vectorizer.vectorize(parser);
 
         Assertions.assertEquals(14, vector.length);
         Assertions.assertEquals(0.01f, vector[0], 0.0001f); // amount
@@ -49,18 +47,19 @@ class VectorizerTest {
     }
 
     @Test
-    @DisplayName("Should handle null last_transaction with -1 sentinel")
+    @DisplayName("Should handle missing last_transaction with -1 sentinel")
     void testNullLastTransaction() {
-        TransactionPayload payload = new TransactionPayload(
-            "tx-1",
-            new TransactionPayload.TransactionData(100.0f, 1, OffsetDateTime.parse("2026-03-11T18:45:53Z")),
-            new TransactionPayload.CustomerData(100.0f, 1, List.of("MERC-1")),
-            new TransactionPayload.MerchantData("MERC-1", "5411", 100.0f),
-            new TransactionPayload.TerminalData(false, true, 10.0f),
-            null
-        );
-
-        float[] vector = vectorizer.vectorize(payload);
+        String json = """
+        {
+          "transaction": { "amount": 100.0, "installments": 1, "requested_at": "2026-03-11T18:45:53Z" },
+          "customer": { "avg_amount": 100.0, "tx_count_24h": 1, "known_merchants": ["MERC-1"] },
+          "merchant": { "id": "MERC-1", "mcc": "5411", "avg_amount": 100.0 },
+          "terminal": { "is_online": false, "card_present": true, "km_from_home": 10.0 }
+        }
+        """;
+        
+        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
+        float[] vector = vectorizer.vectorize(parser);
 
         Assertions.assertEquals(-1.0f, vector[5], 0.0001f); // minutes_since_last
         Assertions.assertEquals(-1.0f, vector[6], 0.0001f); // km_from_last
@@ -69,16 +68,17 @@ class VectorizerTest {
     @Test
     @DisplayName("Should clamp values to [0, 1]")
     void testClamping() {
-        TransactionPayload payload = new TransactionPayload(
-            "tx-1",
-            new TransactionPayload.TransactionData(20000.0f, 20, OffsetDateTime.parse("2026-03-11T18:45:53Z")),
-            new TransactionPayload.CustomerData(1.0f, 100, List.of()),
-            new TransactionPayload.MerchantData("MERC-2", "5411", 20000.0f),
-            new TransactionPayload.TerminalData(true, false, 2000.0f),
-            null
-        );
-
-        float[] vector = vectorizer.vectorize(payload);
+        String json = """
+        {
+          "transaction": { "amount": 20000.0, "installments": 20, "requested_at": "2026-03-11T18:45:53Z" },
+          "customer": { "avg_amount": 1.0, "tx_count_24h": 100, "known_merchants": [] },
+          "merchant": { "id": "MERC-2", "mcc": "5411", "avg_amount": 20000.0 },
+          "terminal": { "is_online": true, "card_present": false, "km_from_home": 2000.0 }
+        }
+        """;
+        
+        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
+        float[] vector = vectorizer.vectorize(parser);
 
         Assertions.assertEquals(1.0f, vector[0], 0.0001f); // amount
         Assertions.assertEquals(1.0f, vector[1], 0.0001f); // installments

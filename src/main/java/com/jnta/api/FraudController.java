@@ -7,8 +7,6 @@ import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.serde.annotation.Serdeable;
 
-import java.util.Map;
-
 @Controller("/fraud-score")
 public class FraudController {
 
@@ -21,8 +19,9 @@ public class FraudController {
     }
 
     @Post
-    public FraudResponse score(@Body TransactionPayload payload) {
-        float[] query = vectorizer.vectorize(payload);
+    public FraudResponse score(@Body byte[] body) {
+        ManualJsonParser parser = new ManualJsonParser(body);
+        float[] query = vectorizer.vectorize(parser);
         var tree = treeService.getTree();
         
         if (tree == null) {
@@ -42,7 +41,7 @@ public class FraudController {
             }
         }
 
-        float score = found > 0 ? (float) fraudCount / 5.0f : 0.0f;
+        float score = (float) fraudCount / 5.0f;
         boolean approved = score < 0.6f;
 
         return new FraudResponse(approved, score);

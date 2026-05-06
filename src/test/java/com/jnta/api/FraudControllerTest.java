@@ -1,6 +1,5 @@
 package com.jnta.api;
 
-import io.micronaut.context.annotation.Property;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
@@ -9,13 +8,10 @@ import io.micronaut.http.client.annotation.Client;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import com.jnta.vp.VpTree;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -52,7 +48,7 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
     @Test
     @DisplayName("POST /fraud-score should return 200 OK and correct JSON structure")
     void testFraudScoreEndpoint() {
-        TransactionPayload payload = createPayload(100.0f); // distance logic is complex, but let's test structure first
+        Map<String, Object> payload = createPayload(100.0f);
         HttpResponse<Map> response = client.toBlocking().exchange(HttpRequest.POST("/fraud-score", payload), Map.class);
         Assertions.assertEquals(HttpStatus.OK, response.getStatus());
     }
@@ -60,9 +56,7 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
     @Test
     @DisplayName("Transaction should be REJECTED when fraud_score >= 0.6")
     void testRejection() {
-        // Close to 0.8 (Vector 8) -> Neighbors should be 6, 7, 8, 9, 5 (all fraud)
-        TransactionPayload payload = createPayload(0.8f); 
-        
+        Map<String, Object> payload = createPayload(0.8f); 
         Map body = client.toBlocking().retrieve(HttpRequest.POST("/fraud-score", payload), Map.class);
         
         float score = ((Double) body.get("fraud_score")).floatValue();
@@ -73,9 +67,7 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
     @Test
     @DisplayName("Transaction should be APPROVED when fraud_score < 0.6")
     void testApproval() {
-        // Close to 0.2 (Vector 2) -> Neighbors should be 0, 1, 2, 3, 4 (all legit)
-        TransactionPayload payload = createPayload(0.2f); 
-
+        Map<String, Object> payload = createPayload(0.2f); 
         Map body = client.toBlocking().retrieve(HttpRequest.POST("/fraud-score", payload), Map.class);
         
         float score = ((Double) body.get("fraud_score")).floatValue();
@@ -83,14 +75,12 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
         Assertions.assertTrue((Boolean) body.get("approved"));
     }
 
-    private TransactionPayload createPayload(float amount) {
-        return new TransactionPayload(
-            "tx-123",
-            new TransactionPayload.TransactionData(amount * 10000.0f, 1, OffsetDateTime.now()), // normalized to amount
-            new TransactionPayload.CustomerData(500.0f, 2, List.of("m-1")),
-            new TransactionPayload.MerchantData("m-1", "5411", 100.0f),
-            new TransactionPayload.TerminalData(true, true, 5.0f),
-            null
+    private Map<String, Object> createPayload(float amount) {
+        return Map.of(
+            "transaction", Map.of("amount", amount * 10000.0f, "installments", 1, "requested_at", OffsetDateTime.now().toString()),
+            "customer", Map.of("avg_amount", 500.0f, "tx_count_24h", 2, "known_merchants", List.of("m-1")),
+            "merchant", Map.of("id", "m-1", "mcc", "5411", "avg_amount", 100.0f),
+            "terminal", Map.of("is_online", true, "card_present", true, "km_from_home", 5.0f)
         );
     }
 }
