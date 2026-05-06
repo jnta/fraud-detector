@@ -1,20 +1,17 @@
 package com.jnta.risk;
 
-import it.unimi.dsi.fastutil.ints.Int2FloatMap;
-import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
-import it.unimi.dsi.fastutil.objects.Object2DoubleOpenHashMap;
-import jakarta.annotation.PostConstruct;
-import io.micronaut.context.annotation.Context;
-import io.micronaut.json.JsonMapper;
 import java.io.InputStream;
 import java.util.Map;
+import java.util.Arrays;
+
+import io.micronaut.context.annotation.Context;
+import io.micronaut.json.JsonMapper;
+import jakarta.annotation.PostConstruct;
 
 @Context
 public class MccRiskProvider {
 
-    private final Int2FloatMap riskScores = new Int2FloatOpenHashMap();
-    private final Object2DoubleMap<String> normalizationConstants = new Object2DoubleOpenHashMap<>();
+    private final float[] riskScores = new float[10000];
     private final JsonMapper jsonMapper;
 
     private float maxAmount;
@@ -27,6 +24,7 @@ public class MccRiskProvider {
 
     public MccRiskProvider(JsonMapper jsonMapper) {
         this.jsonMapper = jsonMapper;
+        Arrays.fill(riskScores, 0.5f);
     }
 
     @PostConstruct
@@ -39,9 +37,11 @@ public class MccRiskProvider {
         try (InputStream is = getClass().getResourceAsStream("/mcc_risk.json")) {
             if (is != null) {
                 Map<String, Double> rawData = jsonMapper.readValue(is, Map.class);
-                riskScores.defaultReturnValue(0.5f);
                 for (Map.Entry<String, Double> entry : rawData.entrySet()) {
-                    riskScores.put(Integer.parseInt(entry.getKey()), entry.getValue().floatValue());
+                    int mcc = Integer.parseInt(entry.getKey());
+                    if (mcc >= 0 && mcc < 10000) {
+                        riskScores[mcc] = entry.getValue().floatValue();
+                    }
                 }
             }
         } catch (Exception e) {
@@ -53,22 +53,35 @@ public class MccRiskProvider {
         try (InputStream is = getClass().getResourceAsStream("/normalization.json")) {
             if (is != null) {
                 Map<String, Double> rawData = jsonMapper.readValue(is, Map.class);
-                this.normalizationConstants.putAll(rawData);
-                this.maxAmount = (float) normalizationConstants.getOrDefault("max_amount", 10000.0);
-                this.maxInstallments = (float) normalizationConstants.getOrDefault("max_installments", 12.0);
-                this.amountVsAvgRatio = (float) normalizationConstants.getOrDefault("amount_vs_avg_ratio", 10.0);
-                this.maxMinutes = (float) normalizationConstants.getOrDefault("max_minutes", 1440.0);
-                this.maxKm = (float) normalizationConstants.getOrDefault("max_km", 1000.0);
-                this.maxTxCount24h = (float) normalizationConstants.getOrDefault("max_tx_count_24h", 20.0);
-                this.maxMerchantAvgAmount = (float) normalizationConstants.getOrDefault("max_merchant_avg_amount", 10000.0);
+                this.maxAmount = getFloat(rawData, "max_amount", 10000.0f);
+                this.maxInstallments = getFloat(rawData, "max_installments", 12.0f);
+                this.amountVsAvgRatio = getFloat(rawData, "amount_vs_avg_ratio", 10.0f);
+                this.maxMinutes = getFloat(rawData, "max_minutes", 1440.0f);
+                this.maxKm = getFloat(rawData, "max_km", 1000.0f);
+                this.maxTxCount24h = getFloat(rawData, "max_tx_count_24h", 20.0f);
+                this.maxMerchantAvgAmount = getFloat(rawData, "max_merchant_avg_amount", 10000.0f);
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to load normalization.json", e);
         }
     }
 
+    private float getFloat(Map<String, Double> data, String key, float defaultValue) {
+        Double val = data.get(key);
+        return val != null ? val.floatValue() : defaultValue;
+    }
+
     public float getRiskScore(int mcc) {
-        return riskScores.get(mcc);
+        if (mcc < 0 || mcc >= 10000) return 0.5f;
+        return riskScores[mcc];
+    }
+
+    public void warmup() {
+        double sum = 0;
+        for (float v : riskScores) {
+            sum += v;
+        }
+        if (sum < -1) System.out.println(sum);
     }
 
     public float getMaxAmount() { return maxAmount; }

@@ -8,8 +8,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - api1
-      - api2
+      - api
     restart: on-failure
     deploy:
       resources:
@@ -17,41 +16,27 @@ services:
           cpus: '0.05'
           memory: 20M
 
-  api1:
+  api:
     build:
       context: .
       dockerfile: Dockerfile.native
     platform: linux/amd64
     privileged: false
-    command: ["-Xmx32m", "-XX:MaxDirectMemorySize=10m"]
+    command: [
+      "-Xmx100m", 
+      "-Xms100m", 
+      "-XX:+UseSerialGC", 
+      "-Djdk.virtualThreadScheduler.parallelism=1"
+    ]
     environment:
       - VPTREE_PATH=/data/references.vpt
-      - JAVA_OPTS=-Xmx32m -Xms32m -XX:MaxDirectMemorySize=10m
     volumes:
       - ./references.vpt:/data/references.vpt:ro
     deploy:
       resources:
         limits:
-          cpus: '0.475'
-          memory: 165M
-
-  api2:
-    build:
-      context: .
-      dockerfile: Dockerfile.native
-    platform: linux/amd64
-    privileged: false
-    command: ["-Xmx32m", "-XX:MaxDirectMemorySize=10m"]
-    environment:
-      - VPTREE_PATH=/data/references.vpt
-      - JAVA_OPTS=-Xmx32m -Xms32m -XX:MaxDirectMemorySize=10m
-    volumes:
-      - ./references.vpt:/data/references.vpt:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '0.475'
-          memory: 165M
+          cpus: '0.95'
+          memory: 310M
 
 networks:
   default:

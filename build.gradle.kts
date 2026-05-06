@@ -21,7 +21,6 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
     compileOnly("io.micronaut:micronaut-http-client")
     runtimeOnly("ch.qos.logback:logback-classic")
-    implementation("it.unimi.dsi:fastutil:8.5.15")
     testImplementation("io.micronaut:micronaut-http-client")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -92,7 +91,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.withType<Test>().configureEach {
-    jvmArgs("--add-modules", "jdk.incubator.vector")
+    jvmArgs("--add-modules", "jdk.incubator.vector", "-XX:MaxDirectMemorySize=1g")
 }
 
 // https://docs.gradle.org/current/userguide/upgrading_major_version_9.html#test_task_fails_when_no_tests_are_discovered

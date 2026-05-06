@@ -5,6 +5,7 @@ import io.micronaut.context.annotation.Value;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import io.micronaut.runtime.event.annotation.EventListener;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -25,6 +26,9 @@ public class VpTreeService {
     @Inject
     ReadinessProvider readinessProvider;
 
+    @Inject
+    com.jnta.risk.MccRiskProvider riskProvider;
+
     private VpTree tree;
 
     @PostConstruct
@@ -41,12 +45,20 @@ public class VpTreeService {
 
     @EventListener
     void onStartup(ServerStartupEvent event) {
+        LOG.info("Warming up providers...");
         if (tree != null) {
-            LOG.info("Warming up VP-Tree...");
             tree.warmup();
-            LOG.info("Warm-up complete.");
         }
+        riskProvider.warmup();
+        LOG.info("Warm-up complete.");
         readinessProvider.setReady(true);
+    }
+
+    @PreDestroy
+    void close() {
+        if (tree != null) {
+            tree.close();
+        }
     }
 
     public VpTree getTree() {

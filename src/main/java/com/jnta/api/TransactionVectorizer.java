@@ -1,6 +1,7 @@
 package com.jnta.api;
 
 import com.jnta.risk.MccRiskProvider;
+
 import jakarta.inject.Singleton;
 
 @Singleton

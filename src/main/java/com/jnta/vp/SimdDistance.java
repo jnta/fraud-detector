@@ -1,12 +1,12 @@
 package com.jnta.vp;
 
-import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorOperators;
-import jdk.incubator.vector.VectorSpecies;
-import java.nio.ByteBuffer;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+
+import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorSpecies;
 
 public class SimdDistance {
     private static final VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
@@ -30,7 +30,7 @@ public class SimdDistance {
             sum += diff * diff;
         }
         
-        return (float) Math.sqrt(sum);
+        return sum;
     }
 
     public static float compute(float[] a, MemorySegment segment, long offset) {
@@ -52,6 +52,6 @@ public class SimdDistance {
             float diff = a[i] - segment.get(ValueLayout.JAVA_FLOAT.withOrder(le), offset + (long) i * 4);
             res += diff * diff;
         }
-        return (float) Math.sqrt(res);
+        return res;
     }
 }
