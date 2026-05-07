@@ -266,6 +266,22 @@ public class VpTree implements SearchEngine {
         return segment.get(ValueLayout.JAVA_BYTE, (long) index * nodeSize + 16) == 1;
     }
 
+    public LinearScanEngine toLinearScan() {
+        float[][] data = new float[dims][size];
+        boolean[] fraud = new boolean[size];
+        float range = globalMax - globalMin;
+        for (int i = 0; i < size; i++) {
+            long offset = (long) i * nodeSize;
+            fraud[i] = segment.get(ValueLayout.JAVA_BYTE, offset + 16) == 1;
+            for (int d = 0; d < dims; d++) {
+                short s = segment.get(ValueLayout.JAVA_SHORT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 20 + (long) d * 2);
+                float normalized = (s + 32768) / 65535.0f;
+                data[d][i] = normalized * range + globalMin;
+            }
+        }
+        return new LinearScanEngine(data, fraud);
+    }
+
     private static final ThreadLocal<int[]> NODE_STACK = ThreadLocal.withInitial(() -> new int[1024]);
     private static final ThreadLocal<float[]> BOUND_STACK_Q = ThreadLocal.withInitial(() -> new float[1024]);
 

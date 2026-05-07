@@ -32,6 +32,9 @@ public class VpTreeService {
     @Value("${vptree.cache.size:1000000}")
     int cacheSize;
 
+    @Value("${search.strategy:vptree}")
+    String strategy;
+
     private SearchEngine engine;
 
     @PostConstruct
@@ -43,16 +46,24 @@ public class VpTreeService {
         }
         LOG.info("Loading VP-Tree from {}...", vptPath);
         VpTree tree = VpTree.load(path);
-        this.engine = tree;
         
-        if (cacheSize > 0) {
-            LOG.info("Initializing Hot Node Cache (size={})...", cacheSize);
-            HotNodeCache cache = new HotNodeCache(tree, cacheSize);
-            tree.setHotNodeCache(cache);
-            LOG.info("Hot Node Cache initialized with {} nodes.", cache.getCapacity());
+        if ("linear".equalsIgnoreCase(strategy)) {
+            LOG.info("Initializing LinearScanEngine strategy...");
+            this.engine = tree.toLinearScan();
+            // In linear strategy, we don't need the tree or cache anymore
+            tree.close(); 
+        } else {
+            LOG.info("Initializing VpTree strategy...");
+            this.engine = tree;
+            if (cacheSize > 0) {
+                LOG.info("Initializing Hot Node Cache (size={})...", cacheSize);
+                HotNodeCache cache = new HotNodeCache(tree, cacheSize);
+                tree.setHotNodeCache(cache);
+                LOG.info("Hot Node Cache initialized with {} nodes.", cache.getCapacity());
+            }
         }
         
-        LOG.info("Loaded VP-Tree with {} nodes.", engine.size());
+        LOG.info("Search strategy '{}' initialized with {} nodes.", strategy, engine.size());
     }
 
     @EventListener
