@@ -30,7 +30,23 @@ public class Preprocessor {
         if (range == 0) range = 1.0f;
         for (int i = 0; i < vec.length; i++) {
             float normalized = (vec[i] - min) / range;
+            if (normalized < 0.0f) normalized = 0.0f;
+            if (normalized > 1.0f) normalized = 1.0f;
             quantized[i] = (byte) Math.round(normalized * 255.0f - 128.0f);
+        }
+        return quantized;
+    }
+
+    public static short[] quantize16Bit(float[] vec, float min, float max) {
+        short[] quantized = new short[vec.length];
+        float range = max - min;
+        if (range == 0) range = 1.0f;
+        for (int i = 0; i < vec.length; i++) {
+            float normalized = (vec[i] - min) / range;
+            if (normalized < 0.0f) normalized = 0.0f;
+            if (normalized > 1.0f) normalized = 1.0f;
+            // Map [0, 1] to [-32768, 32767]
+            quantized[i] = (short) Math.round(normalized * 65535.0f - 32768.0f);
         }
         return quantized;
     }
@@ -81,6 +97,6 @@ public class Preprocessor {
 
         VpTree tree = VpTree.build(vectors, labels);
         tree.save(Paths.get(outputPath));
-        System.out.println("Saved Quantized (8-bit) VP-Tree with " + vectors.size() + " vectors to " + outputPath);
+        System.out.println("Saved Quantized (16-bit) VP-Tree with " + vectors.size() + " vectors to " + outputPath);
     }
 }

@@ -29,6 +29,9 @@ public class VpTreeService {
     @Inject
     com.jnta.risk.MccRiskProvider riskProvider;
 
+    @Value("${vptree.cache.size:1000000}")
+    int cacheSize;
+
     private VpTree tree;
 
     @PostConstruct
@@ -40,6 +43,14 @@ public class VpTreeService {
         }
         LOG.info("Loading VP-Tree from {}...", vptPath);
         this.tree = VpTree.load(path);
+        
+        if (cacheSize > 0) {
+            LOG.info("Initializing Hot Node Cache (size={})...", cacheSize);
+            HotNodeCache cache = new HotNodeCache(tree, cacheSize);
+            tree.setHotNodeCache(cache);
+            LOG.info("Hot Node Cache initialized with {} nodes.", cache.getCapacity());
+        }
+        
         LOG.info("Loaded VP-Tree with {} nodes.", tree.size());
     }
 

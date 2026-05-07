@@ -8,8 +8,10 @@ import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.ShortVector;
 import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import jdk.incubator.vector.VectorMask;
 
 public class SimdDistance {
     private static final VectorSpecies<Float> F_SPECIES = FloatVector.SPECIES_PREFERRED;
@@ -98,13 +100,100 @@ public class SimdDistance {
         return sum;
     }
 
-    private static int computeQuantizedScalar(byte[] query, MemorySegment segment, long offset) {
-        int sum = 0;
-        for (int i = 0; i < query.length; i++) {
-            int q = query[i];
-            int s = segment.get(ValueLayout.JAVA_BYTE, offset + i);
-            int diff = q - s;
-            sum += diff * diff;
+    public static long compute16Bit(short[] query, MemorySegment segment, long offset) {
+        int length = query.length;
+        ByteOrder le = ByteOrder.LITTLE_ENDIAN;
+        
+        if (length <= S_SPECIES.length()) {
+            VectorMask<Short> mask = S_SPECIES.indexInRange(0, length);
+            ShortVector va = ShortVector.fromArray(S_SPECIES, query, 0, mask);
+            ShortVector vb = ShortVector.fromMemorySegment(S_SPECIES, segment, offset, le, mask);
+            
+            long totalSum = 0;
+            int numIntParts = S_SPECIES.length() / I_SPECIES.length();
+            for (int p = 0; p < numIntParts; p++) {
+                IntVector vaI = (IntVector) va.convert(VectorOperators.S2I, p);
+                IntVector vbI = (IntVector) vb.convert(VectorOperators.S2I, p);
+                IntVector diffI = vaI.sub(vbI);
+                
+                VectorSpecies<Long> lSpecies = LongVector.SPECIES_PREFERRED;
+                int numLongParts = I_SPECIES.length() / lSpecies.length();
+                for (int lp = 0; lp < numLongParts; lp++) {
+                    LongVector diffL = (LongVector) diffI.convert(VectorOperators.I2L, lp);
+                    totalSum += diffL.mul(diffL).reduceLanes(VectorOperators.ADD);
+                }
+            }
+            return totalSum;
+        }
+        
+        return computeUnrolledScalar(query, segment, offset);
+    }
+
+    public static long computeUnrolledScalar(short[] query, MemorySegment segment, long offset) {
+        int length = query.length;
+        ByteOrder le = ByteOrder.LITTLE_ENDIAN;
+        long sum = 0;
+        int i = 0;
+        
+        for (; i <= length - 4; i += 4) {
+            long q0 = query[i];
+            long s0 = segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + (long) i * 2);
+            long d0 = q0 - s0;
+            
+            long q1 = query[i + 1];
+            long s1 = segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + (long) (i + 1) * 2);
+            long d1 = q1 - s1;
+            
+            long q2 = query[i + 2];
+            long s2 = segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + (long) (i + 2) * 2);
+            long d2 = q2 - s2;
+            
+            long q3 = query[i + 3];
+            long s3 = segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + (long) (i + 3) * 2);
+            long d3 = q3 - s3;
+            
+            sum += (d0 * d0) + (d1 * d1) + (d2 * d2) + (d3 * d3);
+        }
+        
+        for (; i < length; i++) {
+            long q = query[i];
+            long s = segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + (long) i * 2);
+            long d = q - s;
+            sum += d * d;
+        }
+        return sum;
+    }
+
+    public static long computeCached(short[] query, short[] cache, int offset) {
+        long sum = 0;
+        int i = 0;
+        int length = query.length;
+        
+        for (; i <= length - 4; i += 4) {
+            long q0 = query[i];
+            long s0 = cache[offset + i];
+            long d0 = q0 - s0;
+            
+            long q1 = query[i + 1];
+            long s1 = cache[offset + i + 1];
+            long d1 = q1 - s1;
+            
+            long q2 = query[i + 2];
+            long s2 = cache[offset + i + 2];
+            long d2 = q2 - s2;
+            
+            long q3 = query[i + 3];
+            long s3 = cache[offset + i + 3];
+            long d3 = q3 - s3;
+            
+            sum += (d0 * d0) + (d1 * d1) + (d2 * d2) + (d3 * d3);
+        }
+        
+        for (; i < length; i++) {
+            long q = query[i];
+            long s = cache[offset + i];
+            long d = q - s;
+            sum += d * d;
         }
         return sum;
     }

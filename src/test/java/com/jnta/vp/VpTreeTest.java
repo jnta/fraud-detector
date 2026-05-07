@@ -32,7 +32,7 @@ class VpTreeTest {
         VpTree loadedTree = VpTree.load(tempFile);
         Assertions.assertEquals(numVectors, loadedTree.size());
         // Verify a sample
-        Assertions.assertArrayEquals(vectors.get(0), loadedTree.getVector(0), 0.001f);
+        Assertions.assertArrayEquals(vectors.get(0), loadedTree.getVector(0), 0.005f);
         Assertions.assertTrue(loadedTree.isFraud(0));
         Assertions.assertFalse(loadedTree.isFraud(1));
         

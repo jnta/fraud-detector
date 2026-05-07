@@ -13,9 +13,12 @@ class VectorizerTest {
     @Inject
     TransactionVectorizer vectorizer;
 
+    @Inject
+    io.micronaut.serde.ObjectMapper objectMapper;
+
     @Test
     @DisplayName("Should vectorize a complete transaction payload correctly")
-    void testVectorization() {
+    void testVectorization() throws Exception {
         String json = """
         {
           "transaction": { "amount": 100.0, "installments": 1, "requested_at": "2026-03-11T18:45:53Z" },
@@ -26,8 +29,8 @@ class VectorizerTest {
         }
         """;
         
-        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
-        float[] vector = vectorizer.vectorize(parser);
+        TransactionRequest req = objectMapper.readValue(json, TransactionRequest.class);
+        float[] vector = vectorizer.vectorize(req);
 
         Assertions.assertEquals(14, vector.length);
         Assertions.assertEquals(0.01f, vector[0], 0.0001f); // amount
@@ -48,7 +51,7 @@ class VectorizerTest {
 
     @Test
     @DisplayName("Should handle missing last_transaction with -1 sentinel")
-    void testNullLastTransaction() {
+    void testNullLastTransaction() throws Exception {
         String json = """
         {
           "transaction": { "amount": 100.0, "installments": 1, "requested_at": "2026-03-11T18:45:53Z" },
@@ -58,8 +61,8 @@ class VectorizerTest {
         }
         """;
         
-        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
-        float[] vector = vectorizer.vectorize(parser);
+        TransactionRequest req = objectMapper.readValue(json, TransactionRequest.class);
+        float[] vector = vectorizer.vectorize(req);
 
         Assertions.assertEquals(-1.0f, vector[5], 0.0001f); // minutes_since_last
         Assertions.assertEquals(-1.0f, vector[6], 0.0001f); // km_from_last
@@ -67,7 +70,7 @@ class VectorizerTest {
 
     @Test
     @DisplayName("Should clamp values to [0, 1]")
-    void testClamping() {
+    void testClamping() throws Exception {
         String json = """
         {
           "transaction": { "amount": 20000.0, "installments": 20, "requested_at": "2026-03-11T18:45:53Z" },
@@ -77,8 +80,8 @@ class VectorizerTest {
         }
         """;
         
-        ManualJsonParser parser = new ManualJsonParser(json.getBytes(StandardCharsets.UTF_8));
-        float[] vector = vectorizer.vectorize(parser);
+        TransactionRequest req = objectMapper.readValue(json, TransactionRequest.class);
+        float[] vector = vectorizer.vectorize(req);
 
         Assertions.assertEquals(1.0f, vector[0], 0.0001f); // amount
         Assertions.assertEquals(1.0f, vector[1], 0.0001f); // installments
