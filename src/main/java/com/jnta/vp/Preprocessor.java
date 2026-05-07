@@ -49,8 +49,13 @@ public class Preprocessor {
         ObjectMapper mapper = new ObjectMapper();
 
         try (InputStream is = new GZIPInputStream(new FileInputStream(inputPath))) {
-            List<Map<String, Object>> data = mapper.readValue(is, new TypeReference<>() {});
-            for (Map<String, Object> item : data) {
+            com.fasterxml.jackson.core.JsonParser parser = mapper.getFactory().createParser(is);
+            if (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.START_ARRAY) {
+                throw new IOException("Expected start of array");
+            }
+
+            while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_ARRAY) {
+                Map<String, Object> item = mapper.readValue(parser, new TypeReference<Map<String, Object>>() {});
                 List<Number> vecList = (List<Number>) item.get("vector");
                 if (vecList == null) continue;
                 float[] vec = new float[vecList.size()];

@@ -19,4 +19,4 @@ COPY --from=build /home/app/build/native/nativeCompile/FraudDetector /app/FraudD
 EXPOSE 9999
 
 # Run the application
-ENTRYPOINT ["/app/FraudDetector", "-XX:+UseSerialGC", "-Xmx96m", "-Xms96m"]
+ENTRYPOINT ["/app/FraudDetector"]

@@ -241,6 +241,9 @@ public class VpTree {
         float[] boundStack = BOUND_STACK.get();
         int top = 0;
 
+        float lastWorstSq = -1.0f;
+        float lastWorst = 0.0f;
+
         nodeStack[top] = 0;
         boundStack[top] = 0.0f;
         top++;
@@ -248,10 +251,17 @@ public class VpTree {
         while (top > 0) {
             top--;
             int nodeIdx = nodeStack[top];
-            float bound = boundStack[top];
+            float boundSq = boundStack[top];
 
             if (nodeIdx == -1) continue;
-            if (bound > queue.worstDistance()) continue;
+            
+            float worstSq = queue.worstDistance();
+            if (boundSq > worstSq) continue;
+
+            if (worstSq != lastWorstSq) {
+                lastWorstSq = worstSq;
+                lastWorst = (float) Math.sqrt(worstSq);
+            }
 
             long offset = (long) nodeIdx * nodeSize;
             float mu = segment.get(ValueLayout.JAVA_FLOAT.withOrder(ByteOrder.LITTLE_ENDIAN), offset);
@@ -262,32 +272,37 @@ public class VpTree {
             float dSq = quantizedDSq * scaleSq;
             
             queue.insert(nodeIdx, dSq);
+            
+            worstSq = queue.worstDistance();
+            if (worstSq != lastWorstSq) {
+                lastWorstSq = worstSq;
+                lastWorst = (float) Math.sqrt(worstSq);
+            }
 
-            float worstSq = queue.worstDistance();
-            float muSq = mu * mu;
-
-            if (dSq < muSq) {
-                float d = (float) Math.sqrt(dSq);
-                float worst = (float) Math.sqrt(worstSq);
-                if (mu - d <= worst) {
-                    nodeStack[top] = right;
-                    boundStack[top] = (mu - d) * (mu - d);
-                    top++;
-                }
+            if (dSq < mu * mu) {
                 nodeStack[top] = left;
                 boundStack[top] = 0.0f;
                 top++;
-            } else {
-                float d = (float) Math.sqrt(dSq);
-                float worst = (float) Math.sqrt(worstSq);
-                if (d - mu <= worst) {
-                    nodeStack[top] = left;
-                    boundStack[top] = (d - mu) * (d - mu);
+
+                float diff = mu - lastWorst;
+                if (diff <= 0 || diff * diff <= dSq) {
+                    nodeStack[top] = right;
+                    boundStack[top] = diff > 0 ? diff * diff : 0.0f;
                     top++;
                 }
+            } else {
                 nodeStack[top] = right;
                 boundStack[top] = 0.0f;
                 top++;
+
+                float sum = mu + lastWorst;
+                if (dSq <= sum * sum) {
+                    nodeStack[top] = left;
+                    float d = (float) Math.sqrt(dSq);
+                    float diff = d - mu;
+                    boundStack[top] = diff > 0 ? diff * diff : 0.0f;
+                    top++;
+                }
             }
         }
     }
