@@ -14,8 +14,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.05'
-          memory: 20M
+          cpus: '0.10'
+          memory: 30M
 
   api1:
     build:
@@ -24,8 +24,8 @@ services:
     platform: linux/amd64
     privileged: false
     command: [
-      "-Xmx96m", 
-      "-Xms96m", 
+      "-Xmx80m", 
+      "-Xms80m", 
       "-Djdk.virtualThreadScheduler.parallelism=1"
     ]
     environment:
@@ -45,8 +45,8 @@ services:
     platform: linux/amd64
     privileged: false
     command: [
-      "-Xmx96m", 
-      "-Xms96m", 
+      "-Xmx80m", 
+      "-Xms80m", 
       "-Djdk.virtualThreadScheduler.parallelism=1"
     ]
     environment:

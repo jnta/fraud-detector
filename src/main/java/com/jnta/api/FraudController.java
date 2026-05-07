@@ -19,9 +19,8 @@ public class FraudController {
     }
 
     @Post
-    public FraudResponse score(@Body byte[] body) {
-        ManualJsonParser parser = new ManualJsonParser(body);
-        float[] query = vectorizer.vectorize(parser);
+    public FraudResponse score(@Body TransactionRequest request) {
+        float[] query = vectorizer.vectorize(request);
         var tree = treeService.getTree();
         
         if (tree == null) {

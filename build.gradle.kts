@@ -46,6 +46,7 @@ graalvmNative {
 
             buildArgs.add("--add-modules")
             buildArgs.add("jdk.incubator.vector")
+            buildArgs.add("-H:+VectorAPISupport")
         }
     }
 }

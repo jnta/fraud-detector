@@ -182,11 +182,7 @@ public class VpTree {
             }
 
             Arena arena = Arena.ofShared();
-            MemorySegment segment = arena.allocate((long) size * nodeSize);
-            java.nio.ByteBuffer buffer = segment.asByteBuffer();
-            while (buffer.hasRemaining()) {
-                if (channel.read(buffer) == -1) break;
-            }
+            MemorySegment segment = channel.map(FileChannel.MapMode.READ_ONLY, 16L, (long) size * nodeSize, arena);
 
             return new VpTree(dims, size, segment, arena, min, max);
         } finally {
@@ -279,30 +275,34 @@ public class VpTree {
                 lastWorst = (float) Math.sqrt(worstSq);
             }
 
-            if (dSq < mu * mu) {
-                nodeStack[top] = left;
-                boundStack[top] = 0.0f;
-                top++;
-
+            float muSq = mu * mu;
+            if (dSq < muSq) {
+                // Query is inside the inner ball. Left is closer.
+                // Push right (farther) first, then left (closer).
                 float diff = mu - lastWorst;
                 if (diff <= 0 || diff * diff <= dSq) {
                     nodeStack[top] = right;
                     boundStack[top] = diff > 0 ? diff * diff : 0.0f;
                     top++;
                 }
+
+                nodeStack[top] = left;
+                boundStack[top] = 0.0f;
+                top++;
             } else {
+                // Query is outside the inner ball. Right is closer.
+                // Push left (farther) first, then right (closer).
+                float d = (float) Math.sqrt(dSq);
+                float diff = d - mu;
+                if (diff <= lastWorst) {
+                    nodeStack[top] = left;
+                    boundStack[top] = diff * diff;
+                    top++;
+                }
+
                 nodeStack[top] = right;
                 boundStack[top] = 0.0f;
                 top++;
-
-                float sum = mu + lastWorst;
-                if (dSq <= sum * sum) {
-                    nodeStack[top] = left;
-                    float d = (float) Math.sqrt(dSq);
-                    float diff = d - mu;
-                    boundStack[top] = diff > 0 ? diff * diff : 0.0f;
-                    top++;
-                }
             }
         }
     }
