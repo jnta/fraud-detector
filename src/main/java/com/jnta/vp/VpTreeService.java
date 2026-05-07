@@ -32,7 +32,7 @@ public class VpTreeService {
     @Value("${vptree.cache.size:1000000}")
     int cacheSize;
 
-    private VpTree tree;
+    private SearchEngine engine;
 
     @PostConstruct
     void init() throws IOException {
@@ -42,7 +42,8 @@ public class VpTreeService {
             return;
         }
         LOG.info("Loading VP-Tree from {}...", vptPath);
-        this.tree = VpTree.load(path);
+        VpTree tree = VpTree.load(path);
+        this.engine = tree;
         
         if (cacheSize > 0) {
             LOG.info("Initializing Hot Node Cache (size={})...", cacheSize);
@@ -51,14 +52,16 @@ public class VpTreeService {
             LOG.info("Hot Node Cache initialized with {} nodes.", cache.getCapacity());
         }
         
-        LOG.info("Loaded VP-Tree with {} nodes.", tree.size());
+        LOG.info("Loaded VP-Tree with {} nodes.", engine.size());
     }
 
     @EventListener
     void onStartup(ServerStartupEvent event) {
         LOG.info("Warming up providers...");
-        if (tree != null) {
-            tree.warmup();
+        if (engine != null) {
+            if (engine instanceof VpTree) {
+                ((VpTree) engine).warmup();
+            }
         }
         riskProvider.warmup();
         LOG.info("Warm-up complete.");
@@ -67,12 +70,12 @@ public class VpTreeService {
 
     @PreDestroy
     void close() {
-        if (tree != null) {
-            tree.close();
+        if (engine != null) {
+            engine.close();
         }
     }
 
-    public VpTree getTree() {
-        return tree;
+    public SearchEngine getEngine() {
+        return engine;
     }
 }

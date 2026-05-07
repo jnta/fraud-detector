@@ -2,6 +2,7 @@ package com.jnta.api;
 
 import com.jnta.vp.VpTree;
 import com.jnta.vp.VpTreeService;
+import com.jnta.vp.SearchEngine;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
@@ -57,15 +58,17 @@ class StartupWarmupTest {
                 Map.of("vptree.path", vptPath.toString()))) {
             
             VpTreeService service = server.getApplicationContext().getBean(VpTreeService.class);
-            VpTree loadedTree = service.getTree();
+            SearchEngine loadedEngine = service.getEngine();
             
-            Assertions.assertNotNull(loadedTree);
-            Assertions.assertEquals(2, loadedTree.size());
+            Assertions.assertNotNull(loadedEngine);
+            Assertions.assertEquals(2, loadedEngine.size());
             
-            float[] v1 = loadedTree.getVector(0);
+            // Note: Casting for test verification of quantization
+            VpTree treeRef = (VpTree) loadedEngine;
+            float[] v1 = treeRef.getVector(0);
             Assertions.assertEquals(0.5f, v1[0], 0.01f);
             
-            float[] v2 = loadedTree.getVector(1);
+            float[] v2 = treeRef.getVector(1);
             Assertions.assertEquals(0.9f, v2[0], 0.01f);
         }
     }

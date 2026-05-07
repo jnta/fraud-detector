@@ -21,21 +21,21 @@ public class FraudController {
     @Post
     public FraudResponse score(@Body TransactionRequest request) {
         float[] query = vectorizer.vectorize(request);
-        var tree = treeService.getTree();
+        var engine = treeService.getEngine();
         
-        if (tree == null) {
+        if (engine == null) {
             return new FraudResponse(true, 0.0f);
         }
 
         KnnQueue queue = new KnnQueue(5);
-        tree.search(query, queue);
+        engine.search(query, queue);
 
         int fraudCount = 0;
         int[] indices = queue.getIndices();
         int found = queue.size();
         
         for (int i = 0; i < found; i++) {
-            if (tree.isFraud(indices[i])) {
+            if (engine.isFraud(indices[i])) {
                 fraudCount++;
             }
         }

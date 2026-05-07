@@ -11,7 +11,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
-public class VpTree {
+public class VpTree implements SearchEngine {
     final int dims;
     final int size;
     final MemorySegment segment;
@@ -267,7 +267,7 @@ public class VpTree {
     }
 
     private static final ThreadLocal<int[]> NODE_STACK = ThreadLocal.withInitial(() -> new int[1024]);
-    private static final ThreadLocal<float[]> BOUND_STACK = ThreadLocal.withInitial(() -> new float[1024]);
+    private static final ThreadLocal<float[]> BOUND_STACK_Q = ThreadLocal.withInitial(() -> new float[1024]);
 
     public void search(float[] query, KnnQueue queue) {
         if (query.length != dims) {
@@ -276,33 +276,29 @@ public class VpTree {
 
         short[] quantizedQuery = Preprocessor.quantize16Bit(query, globalMin, globalMax);
         float scale = (globalMax - globalMin) / 65535.0f;
+        float invScale = 1.0f / scale;
         float scaleSq = scale * scale;
 
         int[] nodeStack = NODE_STACK.get();
-        float[] boundStack = BOUND_STACK.get();
+        float[] boundStackQ = BOUND_STACK_Q.get();
         int top = 0;
 
         float lastWorstSq = -1.0f;
-        float lastWorst = 0.0f;
+        float lastWorstQ = 0.0f;
 
         nodeStack[top] = 0;
-        boundStack[top] = 0.0f;
+        boundStackQ[top] = 0.0f;
         top++;
 
         while (top > 0) {
             top--;
             int nodeIdx = nodeStack[top];
-            float boundSq = boundStack[top];
+            float boundQ = boundStackQ[top];
 
             if (nodeIdx == -1) continue;
             
-            float worstSq = queue.worstDistance();
-            if (boundSq > worstSq) continue;
-
-            if (worstSq != lastWorstSq) {
-                lastWorstSq = worstSq;
-                lastWorst = (float) Math.sqrt(worstSq);
-            }
+            // Fast prune using quantized bound
+            if (boundQ > lastWorstQ) continue;
 
             long muSqLong;
             int left;
@@ -313,53 +309,60 @@ public class VpTree {
                 muSqLong = cache.getMuSq(nodeIdx);
                 left = cache.getLeft(nodeIdx);
                 right = cache.getRight(nodeIdx);
-                quantizedDSq = SimdDistance.computeCached(quantizedQuery, cache.getVectors(), nodeIdx * dims);
+                if (dims == 7) {
+                    quantizedDSq = SimdDistance.compute7DCached(quantizedQuery, cache.getVectors(), nodeIdx * 7);
+                } else {
+                    quantizedDSq = SimdDistance.computeCached(quantizedQuery, cache.getVectors(), nodeIdx * dims);
+                }
             } else {
                 long offset = (long) nodeIdx * nodeSize;
                 muSqLong = segment.get(ValueLayout.JAVA_LONG.withOrder(ByteOrder.LITTLE_ENDIAN), offset);
                 left = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8);
                 right = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 12);
-                quantizedDSq = SimdDistance.computeUnrolledScalar(quantizedQuery, segment, offset + 20);
+                if (dims == 7) {
+                    quantizedDSq = SimdDistance.compute7D(quantizedQuery, segment, offset + 20);
+                } else {
+                    quantizedDSq = SimdDistance.computeUnrolledScalar(quantizedQuery, segment, offset + 20);
+                }
             }
             
             float dSq = quantizedDSq * scaleSq;
             queue.insert(nodeIdx, dSq);
             
-            worstSq = queue.worstDistance();
+            float worstSq = queue.worstDistance();
             if (worstSq != lastWorstSq) {
                 lastWorstSq = worstSq;
-                lastWorst = (float) Math.sqrt(worstSq);
+                lastWorstQ = (worstSq == Float.MAX_VALUE) ? Float.MAX_VALUE : (float) Math.sqrt(worstSq) * invScale;
             }
+
+            float dQ = SqrtLookupTable.get(quantizedDSq);
+            float muQ = SqrtLookupTable.get(muSqLong);
 
             if (quantizedDSq <= muSqLong) {
                 // Inside inner ball: Left is closer
-                float d = SqrtLookupTable.get(quantizedDSq) * scale;
-                float mu = SqrtLookupTable.get(muSqLong) * scale;
-                float distToBoundary = mu - d;
+                float distToBoundaryQ = muQ - dQ;
                 
-                if (distToBoundary <= lastWorst) {
+                if (distToBoundaryQ <= lastWorstQ) {
                     nodeStack[top] = right;
-                    boundStack[top] = distToBoundary * distToBoundary;
+                    boundStackQ[top] = distToBoundaryQ;
                     top++;
                 }
 
                 nodeStack[top] = left;
-                boundStack[top] = 0.0f;
+                boundStackQ[top] = 0.0f;
                 top++;
             } else {
                 // Outside inner ball: Right is closer
-                float d = SqrtLookupTable.get(quantizedDSq) * scale;
-                float mu = SqrtLookupTable.get(muSqLong) * scale;
-                float distToBoundary = d - mu;
+                float distToBoundaryQ = dQ - muQ;
                 
-                if (distToBoundary <= lastWorst) {
+                if (distToBoundaryQ <= lastWorstQ) {
                     nodeStack[top] = left;
-                    boundStack[top] = distToBoundary * distToBoundary;
+                    boundStackQ[top] = distToBoundaryQ;
                     top++;
                 }
 
                 nodeStack[top] = right;
-                boundStack[top] = 0.0f;
+                boundStackQ[top] = 0.0f;
                 top++;
             }
         }

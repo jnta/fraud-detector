@@ -197,4 +197,27 @@ public class SimdDistance {
         }
         return sum;
     }
+
+    public static long compute7D(short[] query, MemorySegment segment, long offset) {
+        ByteOrder le = ByteOrder.LITTLE_ENDIAN;
+        long d0 = (long) query[0] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset);
+        long d1 = (long) query[1] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + 2);
+        long d2 = (long) query[2] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + 4);
+        long d3 = (long) query[3] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + 6);
+        long d4 = (long) query[4] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + 8);
+        long d5 = (long) query[5] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + 10);
+        long d6 = (long) query[6] - segment.get(ValueLayout.JAVA_SHORT.withOrder(le), offset + 12);
+        return (d0 * d0) + (d1 * d1) + (d2 * d2) + (d3 * d3) + (d4 * d4) + (d5 * d5) + (d6 * d6);
+    }
+
+    public static long compute7DCached(short[] query, short[] cache, int offset) {
+        long d0 = (long) query[0] - cache[offset];
+        long d1 = (long) query[1] - cache[offset + 1];
+        long d2 = (long) query[2] - cache[offset + 2];
+        long d3 = (long) query[3] - cache[offset + 3];
+        long d4 = (long) query[4] - cache[offset + 4];
+        long d5 = (long) query[5] - cache[offset + 5];
+        long d6 = (long) query[6] - cache[offset + 6];
+        return (d0 * d0) + (d1 * d1) + (d2 * d2) + (d3 * d3) + (d4 * d4) + (d5 * d5) + (d6 * d6);
+    }
 }
