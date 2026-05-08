@@ -60,7 +60,7 @@ public class LinearScanEngineTest {
             }
 
             KnnQueue queue = new KnnQueue(5);
-            engine.search(query, queue);
+            engine.search(query, queue, Long.MAX_VALUE);
 
             // Manual scalar search for verification
             KnnQueue expectedQueue = new KnnQueue(5);

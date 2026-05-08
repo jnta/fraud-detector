@@ -47,7 +47,7 @@ public class DebugScanTest {
             }
 
             KnnQueue queue = new KnnQueue(5);
-            engine.search(query, queue);
+            engine.search(query, queue, Long.MAX_VALUE);
 
             KnnQueue expectedQueue = new KnnQueue(5);
             for (int i = 0; i < numVectors; i++) {

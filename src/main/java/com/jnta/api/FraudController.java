@@ -13,6 +13,9 @@ public class FraudController {
     private final TransactionVectorizer vectorizer;
     private final SearchService searchService;
 
+    @io.micronaut.context.annotation.Value("${search.timeout-ms:400}")
+    int timeoutMs;
+
     public FraudController(TransactionVectorizer vectorizer, SearchService searchService) {
         this.vectorizer = vectorizer;
         this.searchService = searchService;
@@ -27,8 +30,10 @@ public class FraudController {
             return new FraudResponse(true, 0.0f);
         }
 
+        long deadlineNanos = System.nanoTime() + (timeoutMs * 1_000_000L);
+
         KnnQueue queue = new KnnQueue(5);
-        engine.search(query, queue);
+        engine.search(query, queue, deadlineNanos);
 
         int fraudCount = 0;
         int[] indices = queue.getIndices();

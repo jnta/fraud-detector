@@ -36,7 +36,7 @@ public class LinearScanEngine implements SearchEngine {
     }
 
     @Override
-    public void search(float[] query, KnnQueue queue) {
+    public void search(float[] query, KnnQueue queue, long deadlineNanos) {
         FloatVector[] qVecs = new FloatVector[dCount];
         for (int d = 0; d < dCount; d++) {
             qVecs[d] = FloatVector.broadcast(F_SPECIES, query[d]);
@@ -49,6 +49,11 @@ public class LinearScanEngine implements SearchEngine {
         FloatVector worstVec = FloatVector.broadcast(F_SPECIES, worst);
         
         for (int i = 0; i < upperBound; i += laneWidth) {
+            if ((i & 8191) == 0 && System.nanoTime() > deadlineNanos) {
+                queue.clear();
+                return;
+            }
+
             FloatVector acc = FloatVector.zero(F_SPECIES);
             
             for (int d = 0; d < dCount; d++) {

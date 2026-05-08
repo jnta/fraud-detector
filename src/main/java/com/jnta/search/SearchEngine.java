@@ -7,7 +7,7 @@ public interface SearchEngine extends AutoCloseable {
     /**
      * Finds the nearest neighbors for a given query vector.
      */
-    void search(float[] query, KnnQueue queue);
+    void search(float[] query, KnnQueue queue, long deadlineNanos);
 
     /**
      * Returns the number of vectors in the engine.
