@@ -1,4 +1,4 @@
-package com.jnta.vp;
+package com.jnta.search.linear;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

@@ -1,6 +1,9 @@
-package com.jnta.vp;
+package com.jnta.search;
 
 import com.jnta.api.ReadinessProvider;
+import com.jnta.risk.MccRiskProvider;
+import com.jnta.search.vpt.VpTree;
+import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.context.annotation.Value;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import io.micronaut.runtime.event.annotation.EventListener;
@@ -17,8 +20,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @Singleton
-public class VpTreeService {
-    private static final Logger LOG = LoggerFactory.getLogger(VpTreeService.class);
+public class SearchService {
+    private static final Logger LOG = LoggerFactory.getLogger(SearchService.class);
 
     @Value("${vptree.path:references.vpt}")
     String vptPath;
@@ -27,12 +30,9 @@ public class VpTreeService {
     ReadinessProvider readinessProvider;
 
     @Inject
-    com.jnta.risk.MccRiskProvider riskProvider;
+    MccRiskProvider riskProvider;
 
-    @Value("${vptree.cache.size:1000000}")
-    int cacheSize;
-
-    @Value("${search.strategy:vptree}")
+    @Value("${search.strategy:linear}")
     String strategy;
 
     private SearchEngine engine;
@@ -41,21 +41,21 @@ public class VpTreeService {
     void init() throws IOException {
         Path path = Paths.get(vptPath);
         if (!Files.exists(path)) {
-            LOG.warn("VP-Tree file not found at {}. Skipping initialization.", vptPath);
+            LOG.warn("Search index file not found at {}. Skipping initialization.", vptPath);
             return;
         }
-        LOG.info("Loading VP-Tree from {}...", vptPath);
-        VpTree tree = VpTree.load(path);
         
-        if ("linear".equalsIgnoreCase(strategy)) {
-            LOG.info("Initializing LinearScanEngine strategy...");
-            this.engine = tree.toLinearScan();
-        } else {
-            LOG.info("Initializing VpTree strategy...");
-            this.engine = tree;
+        LOG.info("Loading Search Index from {}...", vptPath);
+        VpTree tree = VpTreeIO.load(path);
+        
+        if ("vptree".equalsIgnoreCase(strategy)) {
+            LOG.warn("VpTree search strategy requested but NO LONGER SUPPORTED. Falling back to linear.");
         }
         
-        LOG.info("Search strategy '{}' initialized with {} nodes.", strategy, engine.size());
+        LOG.info("Initializing LinearScanEngine strategy...");
+        this.engine = tree.toLinearScan();
+        
+        LOG.info("Search strategy 'linear' initialized with {} nodes.", engine.size());
     }
 
     @EventListener
@@ -69,7 +69,11 @@ public class VpTreeService {
     @PreDestroy
     void close() {
         if (engine != null) {
-            engine.close();
+            try {
+                engine.close();
+            } catch (Exception e) {
+                LOG.error("Error closing search engine", e);
+            }
         }
     }
 

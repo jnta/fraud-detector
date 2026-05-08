@@ -1,7 +1,6 @@
-package com.jnta.vp;
+package com.jnta.search.linear;
 
 import java.util.Random;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,15 +47,6 @@ class SimdDistanceTest {
             
             Assertions.assertEquals(scalarDist, simdDist);
         }
-    }
-
-    private float scalarDistance(float[] a, float[] b) {
-        float sum = 0;
-        for (int i = 0; i < a.length; i++) {
-            float diff = a[i] - b[i];
-            sum += diff * diff;
-        }
-        return sum;
     }
 
     private long scalarDistanceShort(short[] a, short[] b, int offset, int dims) {

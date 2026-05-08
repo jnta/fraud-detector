@@ -1,7 +1,8 @@
-package com.jnta.vp;
+package com.jnta.search.linear;
 
+import com.jnta.search.KnnQueue;
+import com.jnta.search.SearchEngine;
 import jdk.incubator.vector.*;
-import java.util.Arrays;
 
 /**
  * High-performance linear scan engine using Vertical SIMD.

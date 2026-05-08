@@ -1,8 +1,9 @@
 package com.jnta.api;
 
+import com.jnta.search.vpt.VpTree;
+import com.jnta.search.vpt.VpTreeBuilder;
+import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.http.HttpRequest;
-import io.micronaut.http.HttpResponse;
-import io.micronaut.http.HttpStatus;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.jnta.vp.VpTree;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -32,15 +32,17 @@ class LinearStrategyIntegrationTest implements io.micronaut.test.support.TestPro
         try {
             java.nio.file.Files.createDirectories(java.nio.file.Path.of("build"));
             Path vptPath = java.nio.file.Path.of("build/test-fraud-linear.vpt").toAbsolutePath();
-            float[][] vectors = new float[10][7]; // 7 dims
+            java.util.List<float[]> vectors = new java.util.ArrayList<>();
             boolean[] labels = new boolean[10];
             for (int i = 0; i < 10; i++) {
-                java.util.Arrays.fill(vectors[i], 0.0f);
-                vectors[i][0] = (float) i / 10.0f; 
+                float[] v = new float[7];
+                java.util.Arrays.fill(v, 0.0f);
+                v[0] = (float) i / 10.0f; 
+                vectors.add(v);
                 labels[i] = (i >= 5);
             }
-            VpTree tree = VpTree.build(java.util.Arrays.asList(vectors), labels);
-            tree.save(vptPath);
+            VpTree tree = VpTreeBuilder.build(vectors, labels);
+            VpTreeIO.save(tree, vptPath);
             return java.util.Map.of(
                 "vptree.path", vptPath.toString(),
                 "search.strategy", "linear"

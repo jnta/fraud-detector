@@ -1,5 +1,6 @@
-package com.jnta.vp;
+package com.jnta.search;
 
+import com.jnta.search.linear.LinearScanEngine;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import io.micronaut.context.annotation.Property;
 import jakarta.inject.Inject;
@@ -11,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class StrategySelectionTest {
 
     @Inject
-    VpTreeService service;
+    SearchService service;
 
     @Test
     void testServiceUsesLinearStrategy() {

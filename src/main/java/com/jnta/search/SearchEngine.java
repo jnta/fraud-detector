@@ -1,7 +1,6 @@
-package com.jnta.vp;
+package com.jnta.search;
 
 /**
- * The AI-Native Cognitive Gym (Active Learning & Desirable Difficulty).
  * Core interface for similarity search engines.
  */
 public interface SearchEngine extends AutoCloseable {

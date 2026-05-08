@@ -1,4 +1,4 @@
-package com.jnta.vp;
+package com.jnta.search.linear;
 
 public class SqrtLookupTable {
     private static final float[] TABLE = new float[512001];

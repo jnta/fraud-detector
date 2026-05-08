@@ -1,7 +1,7 @@
 package com.jnta.api;
 
-import com.jnta.vp.KnnQueue;
-import com.jnta.vp.VpTreeService;
+import com.jnta.search.KnnQueue;
+import com.jnta.search.SearchService;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Post;
@@ -11,17 +11,17 @@ import io.micronaut.serde.annotation.Serdeable;
 public class FraudController {
 
     private final TransactionVectorizer vectorizer;
-    private final VpTreeService treeService;
+    private final SearchService searchService;
 
-    public FraudController(TransactionVectorizer vectorizer, VpTreeService treeService) {
+    public FraudController(TransactionVectorizer vectorizer, SearchService searchService) {
         this.vectorizer = vectorizer;
-        this.treeService = treeService;
+        this.searchService = searchService;
     }
 
     @Post
     public FraudResponse score(@Body TransactionRequest request) {
         float[] query = vectorizer.vectorize(request);
-        var engine = treeService.getEngine();
+        var engine = searchService.getEngine();
         
         if (engine == null) {
             return new FraudResponse(true, 0.0f);

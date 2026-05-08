@@ -8,7 +8,7 @@
     "edge_case_count": 797,
     "edge_case_rate": 0.0147
   },
-  "p99": "2.14ms",
+  "p99": "2.11ms",
   "scoring": {
     "breakdown": {
       "false_positive_detections": 3797,
@@ -21,7 +21,7 @@
     "weighted_errors_E": 5462,
     "error_rate_epsilon": 0.101038,
     "p99_score": {
-      "value": 2670.1,
+      "value": 2675.58,
       "cut_triggered": false
     },
     "detection_score": {
@@ -30,6 +30,6 @@
       "absolute_penalty": -1121.23,
       "cut_triggered": false
     },
-    "final_score": 2544.39
+    "final_score": 2549.86
   }
 }

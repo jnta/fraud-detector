@@ -1,5 +1,8 @@
 package com.jnta.api;
 
+import com.jnta.search.vpt.VpTree;
+import com.jnta.search.vpt.VpTreeBuilder;
+import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
@@ -11,7 +14,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.jnta.vp.VpTree;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -30,15 +32,17 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
         try {
             java.nio.file.Files.createDirectories(java.nio.file.Path.of("build"));
             Path vptPath = java.nio.file.Path.of("build/test-fraud.vpt").toAbsolutePath();
-            float[][] vectors = new float[10][14];
+            List<float[]> vectors = new java.util.ArrayList<>();
             boolean[] labels = new boolean[10];
             for (int i = 0; i < 10; i++) {
-                java.util.Arrays.fill(vectors[i], 0.0f);
-                vectors[i][0] = (float) i / 10.0f; // 0.0, 0.1, ..., 0.9
+                float[] v = new float[7]; // 7D vector
+                java.util.Arrays.fill(v, 0.0f);
+                v[0] = (float) i / 10.0f; // 0.0, 0.1, ..., 0.9
+                vectors.add(v);
                 labels[i] = (i >= 5);
             }
-            VpTree tree = VpTree.build(java.util.Arrays.asList(vectors), labels);
-            tree.save(vptPath);
+            VpTree tree = VpTreeBuilder.build(vectors, labels);
+            VpTreeIO.save(tree, vptPath);
             return java.util.Map.of("vptree.path", vptPath.toString());
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);

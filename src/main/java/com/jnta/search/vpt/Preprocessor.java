@@ -1,4 +1,4 @@
-package com.jnta.vp;
+package com.jnta.search.vpt;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,8 +95,8 @@ public class Preprocessor {
         boolean[] labels = new boolean[labelsList.size()];
         for (int i = 0; i < labelsList.size(); i++) labels[i] = labelsList.get(i);
 
-        VpTree tree = VpTree.build(vectors, labels);
-        tree.save(Paths.get(outputPath));
+        VpTree tree = VpTreeBuilder.build(vectors, labels);
+        VpTreeIO.save(tree, Paths.get(outputPath));
         System.out.println("Saved Quantized (16-bit) VP-Tree with " + vectors.size() + " vectors to " + outputPath);
     }
 }

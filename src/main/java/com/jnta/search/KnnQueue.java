@@ -1,4 +1,4 @@
-package com.jnta.vp;
+package com.jnta.search;
 
 import java.util.Arrays;
 
