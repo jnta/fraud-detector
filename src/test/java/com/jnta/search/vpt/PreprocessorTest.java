@@ -41,14 +41,22 @@ class PreprocessorTest {
     }
 
     @Test
-    @DisplayName("Preprocessor CLI should transform gzipped JSON into a valid VP-Tree file")
+    @DisplayName("Preprocessor CLI should transform gzipped JSON into a valid binary file")
     void testCli() throws IOException {
         Path input = Files.createTempFile("refs", ".json.gz");
+        // Create 14D vector
+        StringBuilder sb = new StringBuilder("[{\"id\": 1, \"vector\": [");
+        for (int i = 0; i < 14; i++) {
+            sb.append(0.1 * i);
+            if (i < 13) sb.append(",");
+        }
+        sb.append("]}]");
+        
         try (GZIPOutputStream gzos = new GZIPOutputStream(new FileOutputStream(input.toFile()))) {
-            gzos.write("[{\"id\": 1, \"vector\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]}]".getBytes());
+            gzos.write(sb.toString().getBytes());
         }
 
-        Path output = Files.createTempFile("refs", ".vpt");
+        Path output = Files.createTempFile("refs", ".bin");
         Files.deleteIfExists(output);
 
         Preprocessor.main(new String[]{input.toString(), output.toString()});
