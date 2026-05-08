@@ -1,9 +1,6 @@
 package com.jnta.vp;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -14,27 +11,27 @@ import java.util.List;
 public class VpTree implements SearchEngine {
     final int dims;
     final int size;
-    final MemorySegment segment;
-    final long nodeSize;
+    final float[] muQ;
+    final int[] left;
+    final int[] right;
+    final java.util.BitSet labels;
+    final short[] vectors;
     private final float globalMin;
     private final float globalMax;
-    private HotNodeCache cache;
 
-    private final Arena arena;
-
-    private VpTree(int dims, int size, MemorySegment segment, Arena arena, float globalMin, float globalMax) {
+    private VpTree(int dims, int size, float[] muQ, int[] left, int[] right, java.util.BitSet labels, short[] vectors, float globalMin, float globalMax) {
         this.dims = dims;
         this.size = size;
-        this.segment = segment;
-        this.nodeSize = (20L + dims * 2L + 7) & ~7L;
-        this.arena = arena;
+        this.muQ = muQ;
+        this.left = left;
+        this.right = right;
+        this.labels = labels;
+        this.vectors = vectors;
         this.globalMin = globalMin;
         this.globalMax = globalMax;
     }
 
-    public void setHotNodeCache(HotNodeCache cache) {
-        this.cache = cache;
-    }
+
 
     public static VpTree build(List<float[]> vectors, boolean[] labels) {
         float[] bounds = Preprocessor.findGlobalBounds(vectors);
@@ -51,23 +48,26 @@ public class VpTree implements SearchEngine {
         if (vectors.isEmpty()) throw new IllegalArgumentException("No vectors");
         int dims = vectors.get(0).length;
         int size = vectors.size();
-        long nodeSize = (20L + dims * 2L + 7) & ~7L;
-        Arena arena = Arena.ofShared();
-        MemorySegment segment = arena.allocate((long) size * nodeSize);
+        
+        float[] muQArr = new float[size];
+        int[] leftArr = new int[size];
+        int[] rightArr = new int[size];
+        java.util.BitSet labelSet = new java.util.BitSet(size);
+        short[] vectorArr = new short[size * dims];
         
         int[] indices = new int[size];
         for (int i = 0; i < size; i++) indices[i] = i;
         
         try {
             Node root = buildRecursive(vectors, labels, indices, 0, size);
-            writeBfs(root, segment, dims);
+            writeBfs(root, muQArr, leftArr, rightArr, labelSet, vectorArr, dims);
         } catch (Exception e) {
             System.err.println("Build failed: " + e.getMessage());
             e.printStackTrace();
             throw e;
         }
         
-        return new VpTree(dims, size, segment, arena, min, max);
+        return new VpTree(dims, size, muQArr, leftArr, rightArr, labelSet, vectorArr, min, max);
     }
 
     private static class Node {
@@ -113,7 +113,7 @@ public class VpTree implements SearchEngine {
         return node;
     }
 
-    private static void writeBfs(Node root, MemorySegment segment, int dims) {
+    private static void writeBfs(Node root, float[] muQ, int[] left, int[] right, java.util.BitSet labels, short[] vectors, int dims) {
         if (root == null) return;
         
         java.util.Queue<Node> queue = new java.util.LinkedList<>();
@@ -130,23 +130,15 @@ public class VpTree implements SearchEngine {
         
         for (int i = 0; i < bfsNodes.size(); i++) {
             Node node = bfsNodes.get(i);
-            int leftIdx = (node.left != null) ? node.left.bfsIdx : -1;
-            int rightIdx = (node.right != null) ? node.right.bfsIdx : -1;
-            writeNode(segment, i, node.muSq, leftIdx, rightIdx, node.label, node.vp, dims);
+            muQ[i] = (float) Math.sqrt(node.muSq);
+            left[i] = (node.left != null) ? node.left.bfsIdx : -1;
+            right[i] = (node.right != null) ? node.right.bfsIdx : -1;
+            if (node.label == 1) labels.set(i);
+            System.arraycopy(node.vp, 0, vectors, i * dims, dims);
         }
     }
 
-    private static void writeNode(MemorySegment segment, int pos, long muSq, int left, int right, byte label, short[] vp, int dims) {
-        long nodeSize = (20L + dims * 2L + 7) & ~7L;
-        long offset = (long) pos * nodeSize;
-        segment.set(ValueLayout.JAVA_LONG.withOrder(ByteOrder.LITTLE_ENDIAN), offset, muSq);
-        segment.set(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8, left);
-        segment.set(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 12, right);
-        segment.set(ValueLayout.JAVA_BYTE, offset + 16, label);
-        for (int i = 0; i < dims; i++) {
-            segment.set(ValueLayout.JAVA_SHORT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 20 + (long) i * 2, vp[i]);
-        }
-    }
+
 
     private static long distance(short[] a, short[] b) {
         long sum = 0;
@@ -173,6 +165,7 @@ public class VpTree implements SearchEngine {
     }
 
     public void save(Path path) throws IOException {
+        long nodeSize = (20L + dims * 2L + 7) & ~7L;
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
             java.nio.ByteBuffer header = java.nio.ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
             header.putInt(dims);
@@ -185,11 +178,12 @@ public class VpTree implements SearchEngine {
             java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int) nodeSize).order(ByteOrder.LITTLE_ENDIAN);
             for (int index = 0; index < size; index++) {
                 buffer.clear();
-                long offset = (long) index * nodeSize;
-                buffer.putLong(segment.get(ValueLayout.JAVA_LONG.withOrder(ByteOrder.LITTLE_ENDIAN), offset));
-                buffer.putInt(segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8));
-                buffer.putInt(segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 12));
-                buffer.put(segment.get(ValueLayout.JAVA_BYTE, offset + 16));
+                // Convert muQ back to muSq for saving (to maintain file compatibility)
+                long muSqValue = (long) (muQ[index] * muQ[index]);
+                buffer.putLong(muSqValue);
+                buffer.putInt(left[index]);
+                buffer.putInt(right[index]);
+                buffer.put(labels.get(index) ? (byte) 1 : (byte) 0);
                 
                 // Padding
                 buffer.put((byte) 0);
@@ -197,7 +191,7 @@ public class VpTree implements SearchEngine {
                 buffer.put((byte) 0);
                 
                 for (int i = 0; i < dims; i++) {
-                    buffer.putShort(segment.get(ValueLayout.JAVA_SHORT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 20 + (long) i * 2));
+                    buffer.putShort(vectors[index * dims + i]);
                 }
                 
                 while (buffer.position() < nodeSize) {
@@ -210,8 +204,7 @@ public class VpTree implements SearchEngine {
     }
 
     public static VpTree load(Path path) throws IOException {
-        FileChannel channel = FileChannel.open(path, StandardOpenOption.READ);
-        try {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
             java.nio.ByteBuffer header = java.nio.ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
             channel.read(header);
             header.flip();
@@ -221,29 +214,43 @@ public class VpTree implements SearchEngine {
             float max = header.getFloat();
             
             long nodeSize = (20L + dims * 2L + 7) & ~7L;
-            long expectedSize = 16L + (long) size * nodeSize;
-            if (channel.size() < expectedSize) {
-                throw new IOException("File too small");
+            
+            float[] muQ = new float[size];
+            int[] left = new int[size];
+            int[] right = new int[size];
+            java.util.BitSet labels = new java.util.BitSet(size);
+            short[] vectors = new short[size * dims];
+            
+            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int) nodeSize).order(ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < size; i++) {
+                buffer.clear();
+                channel.read(buffer);
+                buffer.flip();
+                
+                long muSqVal = buffer.getLong();
+                muQ[i] = (float) Math.sqrt(muSqVal);
+                left[i] = buffer.getInt();
+                right[i] = buffer.getInt();
+                if (buffer.get() == 1) labels.set(i);
+                
+                // Skip padding (3 bytes + possibly more if dims are small)
+                buffer.position(20);
+                
+                for (int d = 0; d < dims; d++) {
+                    vectors[i * dims + d] = buffer.getShort();
+                }
             }
-
-            Arena arena = Arena.ofShared();
-            MemorySegment segment = channel.map(FileChannel.MapMode.READ_ONLY, 16L, (long) size * nodeSize, arena);
-
-            return new VpTree(dims, size, segment, arena, min, max);
-        } finally {
-            channel.close();
+            
+            return new VpTree(dims, size, muQ, left, right, labels, vectors, min, max);
         }
     }
 
     public void warmup() {
-        long bytes = segment.byteSize();
-        for (long offset = 0; offset < bytes; offset += 4096) {
-            segment.get(ValueLayout.JAVA_BYTE, offset);
-        }
+        // No-op for heap arrays
     }
-
+    
     public void close() {
-        arena.close();
+        // No-op for heap arrays
     }
 
     public int size() {
@@ -251,11 +258,11 @@ public class VpTree implements SearchEngine {
     }
 
     public float[] getVector(int index) {
-        long offset = (long) index * nodeSize + 20;
         float[] v = new float[dims];
         float range = globalMax - globalMin;
+        int offset = index * dims;
         for (int i = 0; i < dims; i++) {
-            short s = segment.get(ValueLayout.JAVA_SHORT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + (long) i * 2);
+            short s = vectors[offset + i];
             float normalized = (s + 32768) / 65535.0f;
             v[i] = normalized * range + globalMin;
         }
@@ -263,7 +270,7 @@ public class VpTree implements SearchEngine {
     }
 
     public boolean isFraud(int index) {
-        return segment.get(ValueLayout.JAVA_BYTE, (long) index * nodeSize + 16) == 1;
+        return labels.get(index);
     }
 
     public LinearScanEngine toLinearScan() {
@@ -271,10 +278,10 @@ public class VpTree implements SearchEngine {
         boolean[] fraud = new boolean[size];
         float range = globalMax - globalMin;
         for (int i = 0; i < size; i++) {
-            long offset = (long) i * nodeSize;
-            fraud[i] = segment.get(ValueLayout.JAVA_BYTE, offset + 16) == 1;
+            fraud[i] = labels.get(i);
+            int offset = i * dims;
             for (int d = 0; d < dims; d++) {
-                short s = segment.get(ValueLayout.JAVA_SHORT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 20 + (long) d * 2);
+                short s = vectors[offset + d];
                 float normalized = (s + 32768) / 65535.0f;
                 data[d][i] = normalized * range + globalMin;
             }
@@ -316,30 +323,14 @@ public class VpTree implements SearchEngine {
             // Fast prune using quantized bound
             if (boundQ > lastWorstQ) continue;
 
-            long muSqLong;
-            int left;
-            int right;
+            int leftIdx = left[nodeIdx];
+            int rightIdx = right[nodeIdx];
             long quantizedDSq;
             
-            if (cache != null && nodeIdx < cache.getCapacity()) {
-                muSqLong = cache.getMuSq(nodeIdx);
-                left = cache.getLeft(nodeIdx);
-                right = cache.getRight(nodeIdx);
-                if (dims == 7) {
-                    quantizedDSq = SimdDistance.compute7DCached(quantizedQuery, cache.getVectors(), nodeIdx * 7);
-                } else {
-                    quantizedDSq = SimdDistance.computeCached(quantizedQuery, cache.getVectors(), nodeIdx * dims);
-                }
+            if (dims == 7) {
+                quantizedDSq = SimdDistance.compute7D(quantizedQuery, vectors, nodeIdx * 7);
             } else {
-                long offset = (long) nodeIdx * nodeSize;
-                muSqLong = segment.get(ValueLayout.JAVA_LONG.withOrder(ByteOrder.LITTLE_ENDIAN), offset);
-                left = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 8);
-                right = segment.get(ValueLayout.JAVA_INT.withOrder(ByteOrder.LITTLE_ENDIAN), offset + 12);
-                if (dims == 7) {
-                    quantizedDSq = SimdDistance.compute7D(quantizedQuery, segment, offset + 20);
-                } else {
-                    quantizedDSq = SimdDistance.computeUnrolledScalar(quantizedQuery, segment, offset + 20);
-                }
+                quantizedDSq = SimdDistance.compute(quantizedQuery, vectors, nodeIdx * dims);
             }
             
             float dSq = quantizedDSq * scaleSq;
@@ -352,32 +343,32 @@ public class VpTree implements SearchEngine {
             }
 
             float dQ = SqrtLookupTable.get(quantizedDSq);
-            float muQ = SqrtLookupTable.get(muSqLong);
+            float muQVal = muQ[nodeIdx];
 
-            if (quantizedDSq <= muSqLong) {
+            if (dQ <= muQVal) {
                 // Inside inner ball: Left is closer
-                float distToBoundaryQ = muQ - dQ;
+                float distToBoundaryQ = muQVal - dQ;
                 
                 if (distToBoundaryQ <= lastWorstQ) {
-                    nodeStack[top] = right;
+                    nodeStack[top] = rightIdx;
                     boundStackQ[top] = distToBoundaryQ;
                     top++;
                 }
 
-                nodeStack[top] = left;
+                nodeStack[top] = leftIdx;
                 boundStackQ[top] = 0.0f;
                 top++;
             } else {
                 // Outside inner ball: Right is closer
-                float distToBoundaryQ = dQ - muQ;
+                float distToBoundaryQ = dQ - muQVal;
                 
                 if (distToBoundaryQ <= lastWorstQ) {
-                    nodeStack[top] = left;
+                    nodeStack[top] = leftIdx;
                     boundStackQ[top] = distToBoundaryQ;
                     top++;
                 }
 
-                nodeStack[top] = right;
+                nodeStack[top] = rightIdx;
                 boundStackQ[top] = 0.0f;
                 top++;
             }

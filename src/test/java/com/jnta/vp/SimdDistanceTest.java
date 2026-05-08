@@ -9,23 +9,44 @@ import org.junit.jupiter.api.Test;
 class SimdDistanceTest {
 
     @Test
-    @DisplayName("SIMD distance should match scalar implementation for 14D vectors")
-    void testSimdMatchesScalar() {
+    @DisplayName("SIMD distance should match scalar implementation for short[] vectors")
+    void testShortSimdMatchesScalar() {
         int dims = 14;
-        float[] a = new float[dims];
-        float[] b = new float[dims];
+        short[] query = new short[dims];
+        short[] vectors = new short[dims * 10];
         Random rnd = new Random(42);
         
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < 10; i++) {
             for (int d = 0; d < dims; d++) {
-                a[d] = rnd.nextFloat();
-                b[d] = rnd.nextFloat();
+                query[d] = (short) rnd.nextInt(1000);
+                vectors[i * dims + d] = (short) rnd.nextInt(1000);
             }
             
-            float scalarDist = scalarDistance(a, b);
-            float simdDist = SimdDistance.compute(a, b);
+            long scalarDist = scalarDistanceShort(query, vectors, i * dims, dims);
+            long simdDist = SimdDistance.compute(query, vectors, i * dims);
             
-            Assertions.assertEquals(scalarDist, simdDist, 1e-5f);
+            Assertions.assertEquals(scalarDist, simdDist);
+        }
+    }
+
+    @Test
+    @DisplayName("SIMD distance should match scalar implementation for 7D short[] vectors")
+    void testShortSimdMatchesScalar7D() {
+        int dims = 7;
+        short[] query = new short[dims];
+        short[] vectors = new short[dims * 10];
+        Random rnd = new Random(42);
+        
+        for (int i = 0; i < 10; i++) {
+            for (int d = 0; d < dims; d++) {
+                query[d] = (short) rnd.nextInt(1000);
+                vectors[i * dims + d] = (short) rnd.nextInt(1000);
+            }
+            
+            long scalarDist = scalarDistanceShort(query, vectors, i * dims, dims);
+            long simdDist = SimdDistance.compute7D(query, vectors, i * dims);
+            
+            Assertions.assertEquals(scalarDist, simdDist);
         }
     }
 
@@ -33,6 +54,15 @@ class SimdDistanceTest {
         float sum = 0;
         for (int i = 0; i < a.length; i++) {
             float diff = a[i] - b[i];
+            sum += diff * diff;
+        }
+        return sum;
+    }
+
+    private long scalarDistanceShort(short[] a, short[] b, int offset, int dims) {
+        long sum = 0;
+        for (int i = 0; i < dims; i++) {
+            long diff = (long) a[i] - (long) b[offset + i];
             sum += diff * diff;
         }
         return sum;

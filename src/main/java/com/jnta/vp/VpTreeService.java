@@ -50,17 +50,9 @@ public class VpTreeService {
         if ("linear".equalsIgnoreCase(strategy)) {
             LOG.info("Initializing LinearScanEngine strategy...");
             this.engine = tree.toLinearScan();
-            // In linear strategy, we don't need the tree or cache anymore
-            tree.close(); 
         } else {
             LOG.info("Initializing VpTree strategy...");
             this.engine = tree;
-            if (cacheSize > 0) {
-                LOG.info("Initializing Hot Node Cache (size={})...", cacheSize);
-                HotNodeCache cache = new HotNodeCache(tree, cacheSize);
-                tree.setHotNodeCache(cache);
-                LOG.info("Hot Node Cache initialized with {} nodes.", cache.getCapacity());
-            }
         }
         
         LOG.info("Search strategy '{}' initialized with {} nodes.", strategy, engine.size());
@@ -69,11 +61,6 @@ public class VpTreeService {
     @EventListener
     void onStartup(ServerStartupEvent event) {
         LOG.info("Warming up providers...");
-        if (engine != null) {
-            if (engine instanceof VpTree) {
-                ((VpTree) engine).warmup();
-            }
-        }
         riskProvider.warmup();
         LOG.info("Warm-up complete.");
         readinessProvider.setReady(true);
