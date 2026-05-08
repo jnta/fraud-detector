@@ -5,55 +5,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
 public class Preprocessor {
-    public static float[] findGlobalBounds(List<float[]> vectors) {
-        float min = Float.POSITIVE_INFINITY;
-        float max = Float.NEGATIVE_INFINITY;
-        for (float[] vec : vectors) {
-            for (float v : vec) {
-                if (v < min) min = v;
-                if (v > max) max = v;
-            }
-        }
-        return new float[]{min, max};
-    }
-
-    public static byte[] quantize(float[] vec, float min, float max) {
-        byte[] quantized = new byte[vec.length];
-        float range = max - min;
-        if (range == 0) range = 1.0f;
-        for (int i = 0; i < vec.length; i++) {
-            float normalized = (vec[i] - min) / range;
-            if (normalized < 0.0f) normalized = 0.0f;
-            if (normalized > 1.0f) normalized = 1.0f;
-            quantized[i] = (byte) Math.round(normalized * 255.0f - 128.0f);
-        }
-        return quantized;
-    }
-
-    public static short[] quantize16Bit(float[] vec, float min, float max) {
-        short[] quantized = new short[vec.length];
-        float range = max - min;
-        if (range == 0) range = 1.0f;
-        for (int i = 0; i < vec.length; i++) {
-            float normalized = (vec[i] - min) / range;
-            if (normalized < 0.0f) normalized = 0.0f;
-            if (normalized > 1.0f) normalized = 1.0f;
-            // Map [0, 1] to [-32768, 32767]
-            quantized[i] = (short) Math.round(normalized * 65535.0f - 32768.0f);
-        }
-        return quantized;
-    }
-
     public static void main(String[] args) throws IOException {
         if (args.length < 2) {
-            System.err.println("Usage: preprocess <input.json.gz> <output.vpt>");
+            System.err.println("Usage: preprocess <input.json.gz> <output.bin>");
             System.exit(1);
         }
 
@@ -92,11 +57,48 @@ public class Preprocessor {
             }
         }
 
-        boolean[] labels = new boolean[labelsList.size()];
-        for (int i = 0; i < labelsList.size(); i++) labels[i] = labelsList.get(i);
+        int n = vectors.size();
+        if (n == 0) {
+            System.err.println("No vectors found.");
+            return;
+        }
 
-        VpTree tree = VpTreeBuilder.build(vectors, labels);
-        VpTreeIO.save(tree, Paths.get(outputPath));
-        System.out.println("Saved Quantized (16-bit) VP-Tree with " + vectors.size() + " vectors to " + outputPath);
+        int dims = vectors.get(0).length;
+        if (dims != 14) {
+            System.err.println("Warning: expected 14 dimensions but found " + dims);
+        }
+
+        try (FileChannel channel = FileChannel.open(Paths.get(outputPath), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            // Write each dimension separately
+            for (int d = 0; d < dims; d++) {
+                int bytesForDim = n * 4;
+                ByteBuffer buf = ByteBuffer.allocate(bytesForDim).order(ByteOrder.nativeOrder());
+                for (int i = 0; i < n; i++) {
+                    buf.putFloat(vectors.get(i)[d]);
+                }
+                buf.flip();
+                while (buf.hasRemaining()) {
+                    channel.write(buf);
+                }
+
+                // Padding to 64 bytes
+                int padding = (64 - (bytesForDim % 64)) % 64;
+                if (padding > 0) {
+                    channel.write(ByteBuffer.allocate(padding));
+                }
+            }
+
+            // Write fraud flags
+            ByteBuffer fraudBuf = ByteBuffer.allocate(n);
+            for (int i = 0; i < n; i++) {
+                fraudBuf.put(labelsList.get(i) ? (byte) 1 : (byte) 0);
+            }
+            fraudBuf.flip();
+            while (fraudBuf.hasRemaining()) {
+                channel.write(fraudBuf);
+            }
+        }
+
+        System.out.println("Saved Transposed Binary file with " + n + " vectors to " + outputPath);
     }
 }

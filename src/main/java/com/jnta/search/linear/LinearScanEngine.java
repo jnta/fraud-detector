@@ -3,6 +3,9 @@ package com.jnta.search.linear;
 import com.jnta.search.KnnQueue;
 import com.jnta.search.SearchEngine;
 import jdk.incubator.vector.*;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 
 /**
  * High-performance linear scan engine using Vertical SIMD.
@@ -10,16 +13,26 @@ import jdk.incubator.vector.*;
 public class LinearScanEngine implements SearchEngine {
     private static final VectorSpecies<Float> F_SPECIES = FloatVector.SPECIES_PREFERRED;
     
-    private final float[][] dims; // Transposed: [D][size]
-    private final boolean[] fraud;
+    private final MemorySegment segment;
     private final int size;
     private final int dCount;
+    private final long[] offsets;
+    private final long fraudOffset;
 
-    public LinearScanEngine(float[][] data, boolean[] fraud) {
-        this.size = data[0].length;
-        this.dCount = data.length;
-        this.fraud = fraud;
-        this.dims = data;
+    public LinearScanEngine(MemorySegment segment, int size, int dCount) {
+        this.segment = segment;
+        this.size = size;
+        this.dCount = dCount;
+        this.offsets = new long[dCount];
+        
+        long currentOffset = 0;
+        for (int i = 0; i < dCount; i++) {
+            offsets[i] = currentOffset;
+            long dimSize = size * 4L;
+            long padding = (64 - (dimSize % 64)) % 64;
+            currentOffset += dimSize + padding;
+        }
+        this.fraudOffset = currentOffset;
     }
 
     @Override
@@ -36,7 +49,7 @@ public class LinearScanEngine implements SearchEngine {
             FloatVector acc = FloatVector.zero(F_SPECIES);
             
             for (int d = 0; d < dCount; d++) {
-                FloatVector v = FloatVector.fromArray(F_SPECIES, dims[d], i);
+                FloatVector v = FloatVector.fromMemorySegment(F_SPECIES, segment, offsets[d] + i * 4L, ByteOrder.nativeOrder());
                 FloatVector diff = v.sub(qVecs[d]);
                 acc = diff.fma(diff, acc);
             }
@@ -57,7 +70,7 @@ public class LinearScanEngine implements SearchEngine {
         for (int i = upperBound; i < size; i++) {
             float sumSq = 0;
             for (int d = 0; d < dCount; d++) {
-                float diff = query[d] - dims[d][i];
+                float diff = query[d] - segment.get(ValueLayout.JAVA_FLOAT, offsets[d] + i * 4L);
                 sumSq += diff * diff;
             }
             if (sumSq < queue.worstDistance()) {
@@ -73,11 +86,11 @@ public class LinearScanEngine implements SearchEngine {
 
     @Override
     public boolean isFraud(int index) {
-        return fraud[index];
+        return segment.get(ValueLayout.JAVA_BYTE, fraudOffset + index) != 0;
     }
 
     @Override
     public void close() {
-        // No resources to release
+        // Nothing to close since Arena manages the MemorySegment
     }
 }

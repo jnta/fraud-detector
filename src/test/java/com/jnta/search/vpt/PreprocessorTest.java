@@ -13,48 +13,37 @@ import java.util.zip.GZIPOutputStream;
 class PreprocessorTest {
 
     @Test
-    @DisplayName("Should find global min and max across all vectors")
-    void testFindGlobalBounds() {
-        List<float[]> vectors = List.of(
-            new float[]{0.5f, -1.0f, 2.0f},
-            new float[]{3.0f, 0.0f, -5.0f},
-            new float[]{1.5f, 4.0f, 1.0f}
-        );
-        
-        float[] bounds = Preprocessor.findGlobalBounds(vectors);
-        
-        Assertions.assertEquals(-5.0f, bounds[0], "Global min mismatch");
-        Assertions.assertEquals(4.0f, bounds[1], "Global max mismatch");
-    }
-
-    @Test
-    @DisplayName("Should quantize floats to 16-bit shorts correctly")
-    void testQuantizationMapping16Bit() {
-        float min = -10.0f;
-        float max = 10.0f;
-        
-        Assertions.assertEquals((short) -32768, Preprocessor.quantize16Bit(new float[]{-10.0f}, min, max)[0]);
-        Assertions.assertEquals((short) 32767, Preprocessor.quantize16Bit(new float[]{10.0f}, min, max)[0]);
-        
-        short mid = Preprocessor.quantize16Bit(new float[]{0.0f}, min, max)[0];
-        Assertions.assertTrue(Math.abs(mid) <= 1);
-    }
-
-    @Test
-    @DisplayName("Preprocessor CLI should transform gzipped JSON into a valid VP-Tree file")
+    @DisplayName("Preprocessor CLI should transform gzipped JSON into an aligned memory-mapped binary file")
     void testCli() throws IOException {
         Path input = Files.createTempFile("refs", ".json.gz");
         try (GZIPOutputStream gzos = new GZIPOutputStream(new FileOutputStream(input.toFile()))) {
-            gzos.write("[{\"id\": 1, \"vector\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]}]".getBytes());
+            gzos.write("[{\"id\": 1, \"fraud\": true, \"vector\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]}, {\"id\": 2, \"fraud\": false, \"vector\": [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4]}]".getBytes());
         }
 
-        Path output = Files.createTempFile("refs", ".vpt");
+        Path output = Files.createTempFile("refs", ".bin");
         Files.deleteIfExists(output);
 
         Preprocessor.main(new String[]{input.toString(), output.toString()});
 
         Assertions.assertTrue(Files.exists(output));
-        Assertions.assertTrue(Files.size(output) > 0);
+        long fileSize = Files.size(output);
+        Assertions.assertTrue(fileSize > 0);
+
+        int N = 2; // Two vectors
+        int dims = 14;
+        
+        // Check 64-byte alignment offsets for each dimension
+        long expectedDataSize = 0;
+        for (int i = 0; i < dims; i++) {
+            long dimSize = N * 4L; // N floats
+            long padding = (64 - (dimSize % 64)) % 64;
+            expectedDataSize += dimSize + padding;
+        }
+
+        // The file should have the dimensions + N bytes for the fraud flags + any padding? 
+        // No need for padding after fraud flags unless required, but let's assume it's just appended
+        long expectedFileSize = expectedDataSize + N;
+        Assertions.assertEquals(expectedFileSize, fileSize, "File size mismatch");
 
         Files.deleteIfExists(input);
         Files.deleteIfExists(output);

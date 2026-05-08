@@ -1,8 +1,5 @@
 package com.jnta.api;
 
-import com.jnta.search.vpt.VpTree;
-import com.jnta.search.vpt.VpTreeBuilder;
-import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
@@ -14,7 +11,11 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -31,18 +32,50 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
     public java.util.Map<String, String> getProperties() {
         try {
             java.nio.file.Files.createDirectories(java.nio.file.Path.of("build"));
-            Path vptPath = java.nio.file.Path.of("build/test-fraud.vpt").toAbsolutePath();
-            List<float[]> vectors = new java.util.ArrayList<>();
-            boolean[] labels = new boolean[10];
-            for (int i = 0; i < 10; i++) {
-                float[] v = new float[7]; // 7D vector
-                java.util.Arrays.fill(v, 0.0f);
-                v[0] = (float) i / 10.0f; // 0.0, 0.1, ..., 0.9
-                vectors.add(v);
+            Path vptPath = java.nio.file.Path.of("build/test-fraud.bin").toAbsolutePath();
+            
+            int numVectors = 10;
+            int dimsCount = 14;
+            
+            // Build float[14][10]
+            float[][] data = new float[dimsCount][numVectors];
+            boolean[] labels = new boolean[numVectors];
+            
+            for (int i = 0; i < numVectors; i++) {
+                data[0][i] = (float) i / 10.0f; // Dimension 0
                 labels[i] = (i >= 5);
             }
-            VpTree tree = VpTreeBuilder.build(vectors, labels);
-            VpTreeIO.save(tree, vptPath);
+            
+            // Write to file
+            long fileSize = 0;
+            for (int i = 0; i < dimsCount; i++) {
+                long dimSize = numVectors * 4L;
+                long padding = (64 - (dimSize % 64)) % 64;
+                fileSize += dimSize + padding;
+            }
+            fileSize += numVectors;
+            
+            ByteBuffer buffer = ByteBuffer.allocate((int) fileSize).order(ByteOrder.LITTLE_ENDIAN);
+            
+            for (int i = 0; i < dimsCount; i++) {
+                for (int j = 0; j < numVectors; j++) {
+                    buffer.putFloat(data[i][j]);
+                }
+                long dimSize = numVectors * 4L;
+                long padding = (64 - (dimSize % 64)) % 64;
+                for (int p = 0; p < padding; p++) {
+                    buffer.put((byte) 0);
+                }
+            }
+            for (int j = 0; j < numVectors; j++) {
+                buffer.put((byte) (labels[j] ? 1 : 0));
+            }
+            buffer.flip();
+            
+            try (FileChannel fc = FileChannel.open(vptPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                fc.write(buffer);
+            }
+            
             return java.util.Map.of("vptree.path", vptPath.toString());
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);

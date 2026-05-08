@@ -2,9 +2,6 @@ package com.jnta.api;
 
 import com.jnta.search.SearchEngine;
 import com.jnta.search.SearchService;
-import com.jnta.search.vpt.VpTree;
-import com.jnta.search.vpt.VpTreeBuilder;
-import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
@@ -15,8 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 
 class StartupWarmupTest {
@@ -24,16 +21,30 @@ class StartupWarmupTest {
     @TempDir
     Path tempDir;
 
+    private void createDummyBinary(Path path, int numVectors) throws IOException {
+        int dimsCount = 14;
+        long fileSize = 0;
+        for (int i = 0; i < dimsCount; i++) {
+            long dimSize = numVectors * 4L;
+            long padding = (64 - (dimSize % 64)) % 64;
+            fileSize += dimSize + padding;
+        }
+        fileSize += numVectors;
+        
+        byte[] bytes = new byte[(int) fileSize];
+        if (numVectors > 1) {
+            bytes[(int) (fileSize - numVectors + 1)] = 1; // 2nd element is fraud
+        }
+        Files.write(path, bytes);
+    }
+
     @Test
     void testStartupSetsReadyFlag() throws IOException {
-        Path vptPath = tempDir.resolve("test.vpt");
-        
-        // Create a small tree
-        VpTree tree = VpTreeBuilder.build(List.of(new float[7], new float[7]), new boolean[]{false, false});
-        VpTreeIO.save(tree, vptPath);
+        Path binPath = tempDir.resolve("test.bin");
+        createDummyBinary(binPath, 2);
 
         try (EmbeddedServer server = ApplicationContext.run(EmbeddedServer.class, 
-                Map.of("vptree.path", vptPath.toString()))) {
+                Map.of("vptree.path", binPath.toString()))) {
             
             HttpClient client = server.getApplicationContext().createBean(HttpClient.class, server.getURL());
             
@@ -47,17 +58,11 @@ class StartupWarmupTest {
 
     @Test
     void testSearchUsingMappedTree() throws IOException {
-        Path vptPath = tempDir.resolve("test_search.vpt");
-        float[] vec1 = new float[7];
-        vec1[0] = 0.5f;
-        float[] vec2 = new float[7];
-        vec2[0] = 0.9f;
-        
-        VpTree tree = VpTreeBuilder.build(List.of(vec1, vec2), new boolean[]{false, true});
-        VpTreeIO.save(tree, vptPath);
+        Path binPath = tempDir.resolve("test_search.bin");
+        createDummyBinary(binPath, 2);
 
         try (EmbeddedServer server = ApplicationContext.run(EmbeddedServer.class, 
-                Map.of("vptree.path", vptPath.toString()))) {
+                Map.of("vptree.path", binPath.toString()))) {
             
             SearchService service = server.getApplicationContext().getBean(SearchService.class);
             SearchEngine loadedEngine = service.getEngine();
