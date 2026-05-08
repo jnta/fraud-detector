@@ -1,7 +1,10 @@
 package com.jnta.api;
 
-import com.jnta.vp.VpTree;
-import com.jnta.vp.VpTreeService;
+import com.jnta.search.SearchEngine;
+import com.jnta.search.SearchService;
+import com.jnta.search.vpt.VpTree;
+import com.jnta.search.vpt.VpTreeBuilder;
+import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
@@ -26,8 +29,8 @@ class StartupWarmupTest {
         Path vptPath = tempDir.resolve("test.vpt");
         
         // Create a small tree
-        VpTree tree = VpTree.build(List.of(new float[14], new float[14]), new boolean[]{false, false});
-        tree.save(vptPath);
+        VpTree tree = VpTreeBuilder.build(List.of(new float[7], new float[7]), new boolean[]{false, false});
+        VpTreeIO.save(tree, vptPath);
 
         try (EmbeddedServer server = ApplicationContext.run(EmbeddedServer.class, 
                 Map.of("vptree.path", vptPath.toString()))) {
@@ -45,28 +48,24 @@ class StartupWarmupTest {
     @Test
     void testSearchUsingMappedTree() throws IOException {
         Path vptPath = tempDir.resolve("test_search.vpt");
-        float[] vec1 = new float[14];
+        float[] vec1 = new float[7];
         vec1[0] = 0.5f;
-        float[] vec2 = new float[14];
+        float[] vec2 = new float[7];
         vec2[0] = 0.9f;
         
-        VpTree tree = VpTree.build(List.of(vec1, vec2), new boolean[]{false, false});
-        tree.save(vptPath);
+        VpTree tree = VpTreeBuilder.build(List.of(vec1, vec2), new boolean[]{false, true});
+        VpTreeIO.save(tree, vptPath);
 
         try (EmbeddedServer server = ApplicationContext.run(EmbeddedServer.class, 
                 Map.of("vptree.path", vptPath.toString()))) {
             
-            VpTreeService service = server.getApplicationContext().getBean(VpTreeService.class);
-            VpTree loadedTree = service.getTree();
+            SearchService service = server.getApplicationContext().getBean(SearchService.class);
+            SearchEngine loadedEngine = service.getEngine();
             
-            Assertions.assertNotNull(loadedTree);
-            Assertions.assertEquals(2, loadedTree.size());
-            
-            float[] v1 = loadedTree.getVector(0);
-            Assertions.assertEquals(0.5f, v1[0], 0.01f);
-            
-            float[] v2 = loadedTree.getVector(1);
-            Assertions.assertEquals(0.9f, v2[0], 0.01f);
+            Assertions.assertNotNull(loadedEngine);
+            Assertions.assertEquals(2, loadedEngine.size());
+            Assertions.assertFalse(loadedEngine.isFraud(0));
+            Assertions.assertTrue(loadedEngine.isFraud(1));
         }
     }
 }

@@ -4,11 +4,10 @@ import com.jnta.search.vpt.VpTree;
 import com.jnta.search.vpt.VpTreeBuilder;
 import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.http.HttpRequest;
-import io.micronaut.http.HttpResponse;
-import io.micronaut.http.HttpStatus;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
+import io.micronaut.context.annotation.Property;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +19,9 @@ import java.util.List;
 import java.util.Map;
 
 @MicronautTest
+@Property(name = "search.strategy", value = "linear")
 @org.junit.jupiter.api.TestInstance(org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS)
-class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvider {
+class LinearStrategyIntegrationTest implements io.micronaut.test.support.TestPropertyProvider {
 
     @Inject
     @Client("/")
@@ -31,34 +31,29 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
     public java.util.Map<String, String> getProperties() {
         try {
             java.nio.file.Files.createDirectories(java.nio.file.Path.of("build"));
-            Path vptPath = java.nio.file.Path.of("build/test-fraud.vpt").toAbsolutePath();
-            List<float[]> vectors = new java.util.ArrayList<>();
+            Path vptPath = java.nio.file.Path.of("build/test-fraud-linear.vpt").toAbsolutePath();
+            java.util.List<float[]> vectors = new java.util.ArrayList<>();
             boolean[] labels = new boolean[10];
             for (int i = 0; i < 10; i++) {
-                float[] v = new float[7]; // 7D vector
+                float[] v = new float[7];
                 java.util.Arrays.fill(v, 0.0f);
-                v[0] = (float) i / 10.0f; // 0.0, 0.1, ..., 0.9
+                v[0] = (float) i / 10.0f; 
                 vectors.add(v);
                 labels[i] = (i >= 5);
             }
             VpTree tree = VpTreeBuilder.build(vectors, labels);
             VpTreeIO.save(tree, vptPath);
-            return java.util.Map.of("vptree.path", vptPath.toString());
+            return java.util.Map.of(
+                "vptree.path", vptPath.toString(),
+                "search.strategy", "linear"
+            );
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Test
-    @DisplayName("POST /fraud-score should return 200 OK and correct JSON structure")
-    void testFraudScoreEndpoint() {
-        Map<String, Object> payload = createPayload(100.0f);
-        HttpResponse<Map> response = client.toBlocking().exchange(HttpRequest.POST("/fraud-score", payload), Map.class);
-        Assertions.assertEquals(HttpStatus.OK, response.getStatus());
-    }
-
-    @Test
-    @DisplayName("Transaction should be REJECTED when fraud_score >= 0.6")
+    @DisplayName("Linear Strategy: Transaction should be REJECTED when fraud_score >= 0.6")
     void testRejection() {
         Map<String, Object> payload = createPayload(0.8f); 
         Map body = client.toBlocking().retrieve(HttpRequest.POST("/fraud-score", payload), Map.class);
@@ -69,7 +64,7 @@ class FraudControllerTest implements io.micronaut.test.support.TestPropertyProvi
     }
 
     @Test
-    @DisplayName("Transaction should be APPROVED when fraud_score < 0.6")
+    @DisplayName("Linear Strategy: Transaction should be APPROVED when fraud_score < 0.6")
     void testApproval() {
         Map<String, Object> payload = createPayload(0.2f); 
         Map body = client.toBlocking().retrieve(HttpRequest.POST("/fraud-score", payload), Map.class);

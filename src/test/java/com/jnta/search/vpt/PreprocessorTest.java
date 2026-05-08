@@ -1,4 +1,4 @@
-package com.jnta.vp;
+package com.jnta.search.vpt;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -28,17 +28,16 @@ class PreprocessorTest {
     }
 
     @Test
-    @DisplayName("Should quantize floats to signed bytes correctly")
-    void testQuantizationMapping() {
+    @DisplayName("Should quantize floats to 16-bit shorts correctly")
+    void testQuantizationMapping16Bit() {
         float min = -10.0f;
         float max = 10.0f;
         
-        // Formula: byte b = round((x - min) * 255 / (max - min) - 128)
-        Assertions.assertEquals((byte) -128, Preprocessor.quantize(new float[]{-10.0f}, min, max)[0]);
-        Assertions.assertEquals((byte) 127, Preprocessor.quantize(new float[]{10.0f}, min, max)[0]);
+        Assertions.assertEquals((short) -32768, Preprocessor.quantize16Bit(new float[]{-10.0f}, min, max)[0]);
+        Assertions.assertEquals((short) 32767, Preprocessor.quantize16Bit(new float[]{10.0f}, min, max)[0]);
         
-        byte mid = Preprocessor.quantize(new float[]{0.0f}, min, max)[0];
-        Assertions.assertTrue(mid == 0 || mid == -1);
+        short mid = Preprocessor.quantize16Bit(new float[]{0.0f}, min, max)[0];
+        Assertions.assertTrue(Math.abs(mid) <= 1);
     }
 
     @Test
@@ -46,7 +45,7 @@ class PreprocessorTest {
     void testCli() throws IOException {
         Path input = Files.createTempFile("refs", ".json.gz");
         try (GZIPOutputStream gzos = new GZIPOutputStream(new FileOutputStream(input.toFile()))) {
-            gzos.write("[{\"id\": 1, \"vector\": [0.1, 0.2]}]".getBytes());
+            gzos.write("[{\"id\": 1, \"vector\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]}]".getBytes());
         }
 
         Path output = Files.createTempFile("refs", ".vpt");

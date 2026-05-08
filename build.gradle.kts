@@ -104,11 +104,15 @@ tasks.withType<AbstractTestTask>().configureEach {
 jmh {
     jvmArgs.add("--add-modules")
     jvmArgs.add("jdk.incubator.vector")
+    jvmArgs.add("-Xmx1g")
     benchmarkMode.add("avgt")
     timeUnit.set("ns")
     warmupIterations.set(1)
-    iterations.set(1)
+    iterations.set(2)
     fork.set(1)
+    if (project.hasProperty("jmh.includes")) {
+        includes.add(project.property("jmh.includes").toString())
+    }
 }
 
 tasks.register<JavaExec>("preprocess") {
