@@ -1,6 +1,6 @@
 package com.jnta.search;
 
-import com.jnta.search.linear.LinearScanEngine;
+import com.jnta.search.linear.MappedSearchEngine;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import io.micronaut.context.annotation.Property;
 import jakarta.inject.Inject;
@@ -17,8 +17,8 @@ class StrategySelectionTest {
     @Test
     void testServiceUsesLinearStrategy() {
         SearchEngine engine = service.getEngine();
-        Assertions.assertTrue(engine instanceof LinearScanEngine, 
-            "Engine should be LinearScanEngine when strategy is 'linear', but was " + 
+        Assertions.assertTrue(engine instanceof MappedSearchEngine, 
+            "Engine should be MappedSearchEngine when strategy is 'linear', but was " + 
             (engine == null ? "null" : engine.getClass().getSimpleName()));
     }
 }

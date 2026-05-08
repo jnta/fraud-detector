@@ -2,8 +2,6 @@ package com.jnta.search;
 
 import com.jnta.api.ReadinessProvider;
 import com.jnta.risk.MccRiskProvider;
-import com.jnta.search.vpt.VpTree;
-import com.jnta.search.vpt.VpTreeIO;
 import io.micronaut.context.annotation.Value;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import io.micronaut.runtime.event.annotation.EventListener;
@@ -23,8 +21,8 @@ import java.nio.file.Paths;
 public class SearchService {
     private static final Logger LOG = LoggerFactory.getLogger(SearchService.class);
 
-    @Value("${vptree.path:references.vpt}")
-    String vptPath;
+    @Value("${search.index.path:references.bin}")
+    String indexPath;
 
     @Inject
     ReadinessProvider readinessProvider;
@@ -32,31 +30,22 @@ public class SearchService {
     @Inject
     MccRiskProvider riskProvider;
 
-    @Value("${search.strategy:linear}")
-    String strategy;
-
     private SearchEngine engine;
 
     @PostConstruct
     void init() throws IOException {
-        Path path = Paths.get(vptPath);
+        Path path = Paths.get(indexPath);
         if (!Files.exists(path)) {
-            LOG.warn("Search index file not found at {}. Skipping initialization.", vptPath);
+            LOG.warn("Search index file not found at {}. Skipping initialization.", indexPath);
             return;
         }
         
-        LOG.info("Loading Search Index from {}...", vptPath);
-        VpTree tree = VpTreeIO.load(path);
+        LOG.info("Loading memory-mapped SIMD index (The Razor) from {}...", indexPath);
+        this.engine = new com.jnta.search.linear.MappedSearchEngine(path);
         
-        if ("vptree".equalsIgnoreCase(strategy)) {
-            LOG.warn("VpTree search strategy requested but NO LONGER SUPPORTED. Falling back to linear.");
-        }
-        
-        LOG.info("Initializing LinearScanEngine strategy...");
-        this.engine = tree.toLinearScan();
-        
-        LOG.info("Search strategy 'linear' initialized with {} nodes.", engine.size());
+        LOG.info("Search engine 'The Razor' initialized with {} nodes.", engine.size());
     }
+
 
     @EventListener
     void onStartup(ServerStartupEvent event) {

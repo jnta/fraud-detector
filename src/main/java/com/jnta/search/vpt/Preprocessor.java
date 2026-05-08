@@ -80,10 +80,13 @@ public class Preprocessor {
                 }
                 vectors.add(vec);
                 
+                Object isFraudObj = item.get("is_fraud");
                 Object fraudObj = item.get("fraud");
                 Object labelObj = item.get("label");
                 boolean isFraud = false;
-                if (fraudObj instanceof Boolean) {
+                if (isFraudObj instanceof Boolean) {
+                    isFraud = (Boolean) isFraudObj;
+                } else if (fraudObj instanceof Boolean) {
                     isFraud = (Boolean) fraudObj;
                 } else if ("fraud".equals(labelObj)) {
                     isFraud = true;
@@ -95,8 +98,41 @@ public class Preprocessor {
         boolean[] labels = new boolean[labelsList.size()];
         for (int i = 0; i < labelsList.size(); i++) labels[i] = labelsList.get(i);
 
-        VpTree tree = VpTreeBuilder.build(vectors, labels);
-        VpTreeIO.save(tree, Paths.get(outputPath));
-        System.out.println("Saved Quantized (16-bit) VP-Tree with " + vectors.size() + " vectors to " + outputPath);
+        int size = vectors.size();
+        int dims = 14;
+        
+        float[] bounds = findGlobalBounds(vectors);
+        float min = bounds[0];
+        float max = bounds[1];
+        
+        short[][] blockA = new short[6][size];
+        short[][] blockB = new short[8][size];
+        
+        int[] indexA = {0, 6, 7, 9, 10, 12};
+        int[] indexB = {1, 2, 3, 4, 5, 8, 11, 13};
+        
+        // Map original dim index to block/row index
+        int[] mapA = new int[14];
+        java.util.Arrays.fill(mapA, -1);
+        for (int i = 0; i < indexA.length; i++) mapA[indexA[i]] = i;
+        
+        int[] mapB = new int[14];
+        java.util.Arrays.fill(mapB, -1);
+        for (int i = 0; i < indexB.length; i++) mapB[indexB[i]] = i;
+
+        for (int i = 0; i < size; i++) {
+            short[] q = quantize16Bit(vectors.get(i), min, max);
+            for (int d = 0; d < 14; d++) {
+                if (mapA[d] != -1) {
+                    blockA[mapA[d]][i] = q[d];
+                } else {
+                    blockB[mapB[d]][i] = q[d];
+                }
+            }
+        }
+
+        com.jnta.search.linear.FlatIndexIO.save(size, blockA, blockB, labels, min, max, Paths.get(outputPath));
+        System.out.println("Saved Flat Binary Index (The Razor) with " + size + " vectors to " + outputPath);
     }
 }
+

@@ -24,14 +24,15 @@ services:
     platform: linux/amd64
     privileged: false
     command: [
-      "-Xmx130m", 
-      "-Xms130m", 
-      "-Djdk.virtualThreadScheduler.parallelism=1"
+      "-Xmx48m", 
+      "-Xms48m", 
+      "-Djdk.virtualThreadScheduler.parallelism=1",
+      "-XX:MaxDirectMemorySize=128M"
     ]
     environment:
-      - VPTREE_PATH=/data/references.vpt
+      - SEARCH_INDEX_PATH=/data/references.bin
     volumes:
-      - ./references.vpt:/data/references.vpt:ro
+      - ./references.bin:/data/references.bin:ro
     deploy:
       resources:
         limits:
@@ -45,19 +46,21 @@ services:
     platform: linux/amd64
     privileged: false
     command: [
-      "-Xmx130m", 
-      "-Xms130m", 
-      "-Djdk.virtualThreadScheduler.parallelism=1"
+      "-Xmx48m", 
+      "-Xms48m", 
+      "-Djdk.virtualThreadScheduler.parallelism=1",
+      "-XX:MaxDirectMemorySize=128M"
     ]
     environment:
-      - VPTREE_PATH=/data/references.vpt
+      - SEARCH_INDEX_PATH=/data/references.bin
     volumes:
-      - ./references.vpt:/data/references.vpt:ro
+      - ./references.bin:/data/references.bin:ro
     deploy:
       resources:
         limits:
           cpus: '0.45'
           memory: 167M
+
 
 networks:
   default:

@@ -116,10 +116,11 @@ jmh {
 }
 
 tasks.register<JavaExec>("preprocess") {
-    mainClass.set("com.jnta.vp.Preprocessor")
+    mainClass.set("com.jnta.search.vpt.Preprocessor")
     classpath = sourceSets["main"].runtimeClasspath
     jvmArgs("--add-modules", "jdk.incubator.vector", "-Xmx1g")
     args = project.findProperty("args")?.toString()?.split(" ") ?: emptyList()
 }
+
 
 
