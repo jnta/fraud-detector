@@ -45,6 +45,9 @@ public class LinearScanEngine implements SearchEngine {
         int laneWidth = F_SPECIES.length();
         int upperBound = F_SPECIES.loopBound(size);
         
+        float worst = queue.worstDistance();
+        FloatVector worstVec = FloatVector.broadcast(F_SPECIES, worst);
+        
         for (int i = 0; i < upperBound; i += laneWidth) {
             FloatVector acc = FloatVector.zero(F_SPECIES);
             
@@ -54,14 +57,18 @@ public class LinearScanEngine implements SearchEngine {
                 acc = diff.fma(diff, acc);
             }
             
-            float worst = queue.worstDistance();
-            if (acc.reduceLanes(VectorOperators.MIN) < worst) {
+            VectorMask<Float> mask = acc.lt(worstVec);
+            if (mask.anyTrue()) {
                 for (int k = 0; k < laneWidth; k++) {
-                    float dist = acc.lane(k);
-                    if (dist < worst) {
-                        queue.insert(i + k, dist);
-                        worst = queue.worstDistance();
+                    if (mask.laneIsSet(k)) {
+                        queue.insert(i + k, acc.lane(k));
                     }
+                }
+                
+                float newWorst = queue.worstDistance();
+                if (newWorst < worst) {
+                    worst = newWorst;
+                    worstVec = FloatVector.broadcast(F_SPECIES, worst);
                 }
             }
         }
