@@ -1,4 +1,4 @@
-.PHONY: build up test smoke down all clean
+.PHONY: build up test smoke down all clean stats
 
 build:
 	docker compose build
@@ -7,11 +7,19 @@ up:
 	docker compose up -d
 
 smoke:
-	docker run --rm -i --network host -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app grafana/k6:latest run resources/k6/smoke.js
+	mkdir -p test
+	(while true; do date '+--- %Y-%m-%d %H:%M:%S ---'; docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}" haproxy api1 api2; echo ''; sleep 3; done) > test/smoke_docker_stats.log & STATS_PID=$$!; \
+	docker run --rm -i --network host -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app grafana/k6:latest run resources/k6/smoke.js; \
+	EXIT_CODE=$$?; kill $$STATS_PID 2>/dev/null || true; exit $$EXIT_CODE
 
 test:
 	mkdir -p test
-	docker run --rm -i --network host -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app grafana/k6:latest run resources/k6/test.js
+	(while true; do date '+--- %Y-%m-%d %H:%M:%S ---'; docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}" haproxy api1 api2; echo ''; sleep 3; done) > test/docker_stats.log & STATS_PID=$$!; \
+	docker run --rm -i --network host -u $(shell id -u):$(shell id -g) -v $(CURDIR):/app -w /app grafana/k6:latest run resources/k6/test.js; \
+	EXIT_CODE=$$?; kill $$STATS_PID 2>/dev/null || true; exit $$EXIT_CODE
+
+stats:
+	docker stats haproxy api1 api2
 
 down:
 	docker compose down -v
