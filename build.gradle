@@ -11,26 +11,33 @@ repositories {
 }
 
 java {
-    sourceCompatibility = '26'
-    targetCompatibility = '26'
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ['--enable-preview']
+    options.compilerArgs += ['--add-modules', 'jdk.incubator.vector']
 }
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
-    jvmArgs += ['--enable-preview']
+    jvmArgs += ['--add-modules', 'jdk.incubator.vector']
+}
+
+tasks.register('generateIndex', JavaExec) {
+    mainClass = 'indexer.IndexGenerator'
+    classpath = sourceSets.main.runtimeClasspath
+    args = ['resources/references.json.gz', 'index.bin', '10000', '5']
 }
 
 graalvmNative {
     binaries {
         main {
-            buildArgs.add('--enable-preview')
+            mainClass = 'Server'
             buildArgs.add('--initialize-at-build-time')
             buildArgs.add('--no-fallback')
             buildArgs.add('-march=native')
+            buildArgs.add('--add-modules=jdk.incubator.vector')
         }
     }
 }
