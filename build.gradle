@@ -35,6 +35,7 @@ graalvmNative {
         main {
             mainClass = 'Server'
             buildArgs.add('--initialize-at-build-time')
+            buildArgs.add('--initialize-at-run-time=api.FraudHandler')
             buildArgs.add('--no-fallback')
             buildArgs.add('-march=native')
             buildArgs.add('--add-modules=jdk.incubator.vector')

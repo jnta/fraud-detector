@@ -1,0 +1,58 @@
+
+services:
+  haproxy:
+    image: haproxy:2.8-alpine
+    container_name: haproxy
+    volumes:
+      - ./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "9999:9999" # API port expected by K6 scripts
+      - "8404:8404" # HAProxy Stats UI
+    depends_on:
+      - api1
+      - api2
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 50M
+
+  api1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-detector:latest
+    container_name: api1
+    volumes:
+      - index-volume:/app:rw
+    environment:
+      - INSTANCE_ID=1
+    ports:
+      - "8081:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 150M
+
+  api2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-detector:latest
+    container_name: api2
+    volumes:
+      - index-volume:/app:rw
+    environment:
+      - INSTANCE_ID=2
+    ports:
+      - "8082:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 150M
+
+volumes:
+  index-volume:
+    name: fraud_detector_index_volume
