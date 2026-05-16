@@ -1,0 +1,41 @@
+plugins {
+    id 'java'
+    id 'org.graalvm.buildtools.native' version '0.10.3'
+}
+
+group = 'com.rinha'
+version = '1.0.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = '26'
+    targetCompatibility = '26'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['--enable-preview']
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    jvmArgs += ['--enable-preview']
+}
+
+graalvmNative {
+    binaries {
+        main {
+            buildArgs.add('--enable-preview')
+            buildArgs.add('--initialize-at-build-time')
+            buildArgs.add('--no-fallback')
+            buildArgs.add('-march=native')
+        }
+    }
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.11.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.11.0'
+}

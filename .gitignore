@@ -1,2 +1,29 @@
+# Project-specific AI / Documentation / Agents
 .agents/
+doc/
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Build Artifacts & Binaries
 bin/
+index.bin
+*.log
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+*~
+*.swp
