@@ -1,4 +1,7 @@
-.PHONY: build up test smoke down all clean stats
+.PHONY: build up test smoke down all clean stats generate-index
+
+generate-index:
+	./gradlew generateIndex --args="resources/references.json.gz fraud.bin legit.bin 512 5" --no-daemon
 
 build:
 	docker compose build
@@ -28,4 +31,4 @@ all: build up smoke test down
 
 clean: down
 	./gradlew clean --no-daemon
-	rm -rf test
+	rm -rf test fraud.bin legit.bin index.bin 10000

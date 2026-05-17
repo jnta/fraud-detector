@@ -25,6 +25,8 @@ public class IndexReader implements AutoCloseable {
     private final int dimension;
     private final Centroid[] centroids;
 
+    private byte[] preloadedData;
+
     public IndexReader(Path indexPath) throws IOException {
         this.channel = FileChannel.open(indexPath, StandardOpenOption.READ);
         this.arena = Arena.ofShared();
@@ -52,6 +54,16 @@ public class IndexReader implements AutoCloseable {
             pos += 4;
             centroids[c] = new Centroid(c, features, offset, count);
         }
+    }
+
+    public void preloadIntoMemory() {
+        if (mappedSegment != null) {
+            this.preloadedData = mappedSegment.toArray(ValueLayout.JAVA_BYTE);
+        }
+    }
+
+    public byte[] getPreloadedData() {
+        return preloadedData;
     }
 
     public int getNumClusters() {
@@ -95,9 +107,16 @@ public class IndexReader implements AutoCloseable {
             throw new IndexOutOfBoundsException("Index " + indexInCluster + " out of bounds for cluster size " + centroid.count());
         }
         long vectorOffset = centroid.offset() + (long) indexInCluster * (dimension + 1);
-        byte[] features = mappedSegment.asSlice(vectorOffset, dimension).toArray(ValueLayout.JAVA_BYTE);
-        byte fraudByte = mappedSegment.get(ValueLayout.JAVA_BYTE, vectorOffset + dimension);
-        return new VectorEntry(features, fraudByte == 1);
+        byte[] features = new byte[dimension];
+        if (preloadedData != null) {
+            System.arraycopy(preloadedData, (int) vectorOffset, features, 0, dimension);
+            byte fraudByte = preloadedData[(int) vectorOffset + dimension];
+            return new VectorEntry(features, fraudByte == 1);
+        } else {
+            features = mappedSegment.asSlice(vectorOffset, dimension).toArray(ValueLayout.JAVA_BYTE);
+            byte fraudByte = mappedSegment.get(ValueLayout.JAVA_BYTE, vectorOffset + dimension);
+            return new VectorEntry(features, fraudByte == 1);
+        }
     }
 
     @Override

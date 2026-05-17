@@ -38,9 +38,10 @@ public class IndexGenerator {
 
     public static void main(String[] args) throws Exception {
         String inputPath = args.length > 0 ? args[0] : "resources/references.json.gz";
-        String outputPath = args.length > 1 ? args[1] : "index.bin";
-        int numClusters = args.length > 2 ? Integer.parseInt(args[2]) : 10000;
-        int numIterations = args.length > 3 ? Integer.parseInt(args[3]) : 5;
+        String fraudOutputPath = args.length > 1 ? args[1] : "fraud.bin";
+        String legitOutputPath = args.length > 2 ? args[2] : "legit.bin";
+        int numClusters = args.length > 3 ? Integer.parseInt(args[3]) : 512;
+        int numIterations = args.length > 4 ? Integer.parseInt(args[4]) : 5;
 
         InputStream fileIn = new FileInputStream(inputPath);
         if (inputPath.endsWith(".gz")) {
@@ -49,10 +50,14 @@ public class IndexGenerator {
         Reader reader = new InputStreamReader(fileIn, StandardCharsets.UTF_8);
         CharReader in = new CharReader(reader);
 
-        int initialCapacity = 3000000;
-        byte[] vectorsData = new byte[initialCapacity * 15];
-        int totalVectors = 0;
+        int fraudCapacity = 2000000;
+        int legitCapacity = 2000000;
+        byte[] fraudVectorsData = new byte[fraudCapacity * 15];
+        byte[] legitVectorsData = new byte[legitCapacity * 15];
+        int totalFraudVectors = 0;
+        int totalLegitVectors = 0;
         char[] tempBuf = new char[64];
+        byte[] tempVector = new byte[15];
 
         while (true) {
             int c;
@@ -67,13 +72,6 @@ public class IndexGenerator {
             if (in.next() != '"') continue;
             while ((c = in.next()) != -1 && c != '[');
             if (c == -1) break;
-
-            if (totalVectors >= initialCapacity) {
-                initialCapacity = (int) (initialCapacity * 1.5);
-                vectorsData = Arrays.copyOf(vectorsData, initialCapacity * 15);
-            }
-
-            int offset = totalVectors * 15;
 
             for (int d = 0; d < 14; d++) {
                 int len = 0;
@@ -90,7 +88,7 @@ public class IndexGenerator {
                     float clamped = Math.max(0.0f, Math.min(1.0f, val));
                     b = (byte) Math.round(128 + clamped * 127);
                 }
-                vectorsData[offset + d] = b;
+                tempVector[d] = b;
             }
 
             while ((c = in.next()) != -1 && c != 'l');
@@ -110,11 +108,40 @@ public class IndexGenerator {
             }
 
             boolean isFraud = (c == 'f');
-            vectorsData[offset + 14] = isFraud ? (byte) 1 : (byte) 0;
+            tempVector[14] = isFraud ? (byte) 1 : (byte) 0;
 
-            totalVectors++;
+            if (isFraud) {
+                if (totalFraudVectors >= fraudCapacity) {
+                    fraudCapacity = (int) (fraudCapacity * 1.5);
+                    fraudVectorsData = Arrays.copyOf(fraudVectorsData, fraudCapacity * 15);
+                }
+                System.arraycopy(tempVector, 0, fraudVectorsData, totalFraudVectors * 15, 15);
+                totalFraudVectors++;
+            } else {
+                if (totalLegitVectors >= legitCapacity) {
+                    legitCapacity = (int) (legitCapacity * 1.5);
+                    legitVectorsData = Arrays.copyOf(legitVectorsData, legitCapacity * 15);
+                }
+                System.arraycopy(tempVector, 0, legitVectorsData, totalLegitVectors * 15, 15);
+                totalLegitVectors++;
+            }
         }
         reader.close();
+
+        clusterAndWrite(fraudVectorsData, totalFraudVectors, numClusters, numIterations, fraudOutputPath);
+        clusterAndWrite(legitVectorsData, totalLegitVectors, numClusters, numIterations, legitOutputPath);
+    }
+
+    private static void clusterAndWrite(byte[] vectorsData, int totalVectors, int numClusters, int numIterations, String outputPath) throws Exception {
+        if (totalVectors == 0) {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(outputPath)))) {
+                out.writeInt(0x49564631);
+                out.writeInt(0);
+                out.writeInt(0);
+                out.writeInt(14);
+            }
+            return;
+        }
 
         KMeans.KMeansResult result = KMeans.cluster(vectorsData, totalVectors, numClusters, numIterations);
         float[][] centroids = result.centroids();

@@ -27,7 +27,7 @@ tasks.withType(Test).configureEach {
 tasks.register('generateIndex', JavaExec) {
     mainClass = 'indexer.IndexGenerator'
     classpath = sourceSets.main.runtimeClasspath
-    args = ['resources/references.json.gz', 'index.bin', '10000', '5']
+    args = ['resources/references.json.gz', 'fraud.bin', 'legit.bin', '512', '5']
 }
 
 graalvmNative {

@@ -2,9 +2,8 @@ package indexer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import search.IndexReader;
 
-import java.io.DataInputStream;
-import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,7 +13,8 @@ public class IndexGeneratorTest {
     @Test
     public void testIndexGenerationEndToEnd(@TempDir Path tempDir) throws Exception {
         Path jsonPath = tempDir.resolve("test-references.json");
-        Path binPath = tempDir.resolve("test-index.bin");
+        Path fraudBinPath = tempDir.resolve("test-fraud.bin");
+        Path legitBinPath = tempDir.resolve("test-legit.bin");
 
         String jsonContent = """
         [
@@ -33,38 +33,27 @@ public class IndexGeneratorTest {
 
         IndexGenerator.main(new String[]{
             jsonPath.toAbsolutePath().toString(),
-            binPath.toAbsolutePath().toString(),
-            "2",
+            fraudBinPath.toAbsolutePath().toString(),
+            legitBinPath.toAbsolutePath().toString(),
+            "1",
             "3"
         });
 
-        assertTrue(Files.exists(binPath));
+        assertTrue(Files.exists(fraudBinPath));
+        assertTrue(Files.exists(legitBinPath));
 
-        try (DataInputStream in = new DataInputStream(new FileInputStream(binPath.toFile()))) {
-            int magic = in.readInt();
-            assertEquals(0x49564631, magic);
+        try (IndexReader fraudReader = new IndexReader(fraudBinPath)) {
+            assertEquals(1, fraudReader.getTotalVectors());
+            assertEquals(1, fraudReader.getNumClusters());
+            IndexReader.VectorEntry entry = fraudReader.getVector(0, 0);
+            assertTrue(entry.isFraud());
+        }
 
-            int clusters = in.readInt();
-            assertEquals(2, clusters);
-
-            int totalVectors = in.readInt();
-            assertEquals(2, totalVectors);
-
-            int dimensions = in.readInt();
-            assertEquals(14, dimensions);
-
-            int totalClusterSizes = 0;
-            for (int c = 0; c < clusters; c++) {
-                for (int d = 0; d < 14; d++) {
-                    in.readFloat();
-                }
-                in.readLong();
-                totalClusterSizes += in.readInt();
-            }
-            assertEquals(2, totalClusterSizes);
-
-            byte[] vectorBytes = in.readAllBytes();
-            assertEquals(2 * 15, vectorBytes.length);
+        try (IndexReader legitReader = new IndexReader(legitBinPath)) {
+            assertEquals(1, legitReader.getTotalVectors());
+            assertEquals(1, legitReader.getNumClusters());
+            IndexReader.VectorEntry entry = legitReader.getVector(0, 0);
+            assertFalse(entry.isFraud());
         }
     }
 }

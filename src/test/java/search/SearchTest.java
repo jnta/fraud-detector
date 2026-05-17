@@ -33,10 +33,10 @@ public class SearchTest {
             int closestCluster = VectorMath.findClosestCentroid(reader, query);
             assertTrue(closestCluster >= 0 && closestCluster < reader.getNumClusters());
 
-            IndexReader.VectorEntry entry = VectorMath.findClosestVectorInCluster(reader, closestCluster, query);
-            if (entry != null) {
-                assertNotNull(entry.features());
-                assertEquals(14, entry.features().length);
+            VectorMath.SearchResult res = VectorMath.findClosestVectorInCluster(reader, closestCluster, query);
+            if (res.entry() != null) {
+                assertNotNull(res.entry().features());
+                assertEquals(14, res.entry().features().length);
             }
         }
     }

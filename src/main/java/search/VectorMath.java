@@ -8,9 +8,12 @@ import jdk.incubator.vector.VectorSpecies;
 
 public class VectorMath {
 
+    public record SearchResult(IndexReader.VectorEntry entry, int distance) {}
+
     private static final VectorSpecies<Float> FLOAT_SPECIES = FloatVector.SPECIES_256;
     private static final VectorSpecies<Byte> BYTE_SPECIES = ByteVector.SPECIES_64;
     private static final VectorSpecies<Integer> INT_SPECIES = IntVector.SPECIES_256;
+    private static final int EARLY_EXIT_THRESHOLD = 8000;
 
     /**
      * Finds the closest centroid to the given query features using FloatVector SIMD acceleration.
@@ -51,19 +54,20 @@ public class VectorMath {
 
     /**
      * Finds the closest vector entry within a specific cluster using ByteVector/IntVector SIMD acceleration.
+     * Tracks the K=5 nearest neighbors and exits early if the 5th neighbor is below EARLY_EXIT_THRESHOLD.
      */
-    public static IndexReader.VectorEntry findClosestVectorInCluster(IndexReader reader, int clusterId, byte[] queryFeatures) {
+    public static SearchResult findClosestVectorInCluster(IndexReader reader, int clusterId, byte[] queryFeatures) {
         int dimension = reader.getDimension();
         int count = reader.getCentroid(clusterId).count();
         if (count == 0) {
-            return null;
+            return new SearchResult(null, Integer.MAX_VALUE);
         }
 
         IntVector vq = ((IntVector) ByteVector.fromArray(BYTE_SPECIES, queryFeatures, 0)
                                  .castShape(INT_SPECIES, 0))
                                  .and(0xFF);
 
-        int minSqDist = Integer.MAX_VALUE;
+        int[] top5Dist = new int[] { Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE };
         IndexReader.VectorEntry bestEntry = null;
 
         for (int i = 0; i < count; i++) {
@@ -83,12 +87,24 @@ public class VectorMath {
                 sqDist += delta * delta;
             }
 
-            if (sqDist < minSqDist) {
-                minSqDist = sqDist;
-                bestEntry = entry;
+            if (sqDist < top5Dist[4]) {
+                int pos = 4;
+                while (pos > 0 && sqDist < top5Dist[pos - 1]) {
+                    top5Dist[pos] = top5Dist[pos - 1];
+                    pos--;
+                }
+                top5Dist[pos] = sqDist;
+
+                if (pos == 0) {
+                    bestEntry = entry;
+                }
+
+                if (top5Dist[4] < EARLY_EXIT_THRESHOLD) {
+                    break;
+                }
             }
         }
 
-        return bestEntry;
+        return new SearchResult(bestEntry, top5Dist[0]);
     }
 }

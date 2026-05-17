@@ -19,14 +19,22 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class FraudHandler implements HttpHandler {
 
-    public static IndexReader indexReader;
+    public static IndexReader fraudReader;
+    public static IndexReader legitReader;
     private static final ConcurrentLinkedQueue<byte[]> bufferPool = new ConcurrentLinkedQueue<>();
+    public static final java.util.concurrent.Semaphore computeSemaphore = new java.util.concurrent.Semaphore(2);
 
     static {
         try {
-            Path path = Paths.get("index.bin");
-            if (Files.exists(path)) {
-                indexReader = new IndexReader(path);
+            Path fraudPath = Paths.get("fraud.bin");
+            if (Files.exists(fraudPath)) {
+                fraudReader = new IndexReader(fraudPath);
+                fraudReader.preloadIntoMemory();
+            }
+            Path legitPath = Paths.get("legit.bin");
+            if (Files.exists(legitPath)) {
+                legitReader = new IndexReader(legitPath);
+                legitReader.preloadIntoMemory();
             }
         } catch (Exception e) {
         }
@@ -218,12 +226,25 @@ public class FraudHandler implements HttpHandler {
         boolean approved = true;
         float fraudScore = 0.0f;
 
-        if (indexReader != null) {
-            int closestCluster = VectorMath.findClosestCentroid(indexReader, queryFeatures);
-            IndexReader.VectorEntry entry = VectorMath.findClosestVectorInCluster(indexReader, closestCluster, queryFeatures);
-            if (entry != null && entry.isFraud()) {
-                approved = false;
-                fraudScore = 1.0f;
+        if (fraudReader != null && legitReader != null) {
+            try {
+                computeSemaphore.acquire();
+                try {
+                    int closestFraudCluster = VectorMath.findClosestCentroid(fraudReader, queryFeatures);
+                    VectorMath.SearchResult fraudRes = VectorMath.findClosestVectorInCluster(fraudReader, closestFraudCluster, queryFeatures);
+                    int distFraud = fraudRes.distance();
+
+                    int closestLegitCluster = VectorMath.findClosestCentroid(legitReader, queryFeatures);
+                    VectorMath.SearchResult legitRes = VectorMath.findClosestVectorInCluster(legitReader, closestLegitCluster, queryFeatures);
+                    int distLegit = legitRes.distance();
+
+                    approved = distLegit <= distFraud;
+                    fraudScore = approved ? 0.0f : 1.0f;
+                } finally {
+                    computeSemaphore.release();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
 
